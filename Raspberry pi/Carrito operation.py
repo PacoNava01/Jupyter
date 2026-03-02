@@ -2,7 +2,9 @@
 
 #Librerias para sistema
 import os 
+import time
 from time import sleep
+from pynput import keyboard
 
 #Librerias para raspberry/motores-servos
 from gpiozero import Motor
@@ -99,24 +101,105 @@ def set_servo_angle(kit, servo_index, angle):
         print("Ángulo fuera de rango. Debe estar entre 0 y 180 grados.")
 
 #Motores DC
+def init_motor():
+    '''
+    Funcion para configurar 
+    e inicializar los motores DC
+
+    fordward: pin GPIO para movimiento hacia adelante
+    backward: pin GPIO para movimiento hacia atrás
+    '''
+    #Configuramos los motores con los pines GPIO 
+
+    motor1 = Motor(forward=17, backward=22) 
+    motor2 = Motor(forward=27, backward=23) 
+
+    #Se detienen los motores al inicio para evitar movimientos no deseados
+    motor1.stop() 
+    motor2.stop() 
+
+    print("Motores DC inicializados correctamente.")
+    return motor1, motor2 #Devolvemos los objetos de los motores para usarlos en el programa principal
+
+# Variables para controlar el tiempo de los servos sin detener el video
+ultimo_cambio = time.time()
+estado_servo = 0
 
 
+def Power_stop(kit,motores):
+    '''
+    Funcion para detener TODO
+    '''
+   
 
+   #EJERCICIO 1
+
+def Stress(kit, tecla,angulo_v,angulo_h, paso=5):
+    '''
+    Una pequeña rutina que aumente el ángulo de 
+    5 en 5 grados cada vez que presiones una tecla 
+    (por ejemplo, la 'a' para aumentar, 'd' para disminuir).
+
+    kit: objeto kit de servos inicializado
+    tecla: tecla presionada para controlar el servo
+    paso: cantidad de grados a aumentar o disminuir con cada tecla (default 5)
+    actual_v: ángulo actual del servo vertical
+    actual_h: ángulo actual del servo horizontal
+    '''
+    nuevo_angulo_v = angulo_v
+    nuevo_angulo_h = angulo_h
+    
+    # Comparamos con ord() porque cv2.waitKey devuelve enteros
+    if tecla == ord('a'):
+        nuevo_angulo_h = min(170, nuevo_angulo_h + paso)
+    elif tecla == ord('d'):
+        nuevo_angulo_h = max(30, nuevo_angulo_h - paso) 
+    elif tecla == ord('w'):
+        nuevo_angulo_v = min(170, nuevo_angulo_v + paso)
+    elif tecla == ord('s'):
+        nuevo_angulo_v = max(30, nuevo_angulo_v - paso)
+
+    #Ajustamos los servos individualmente
+    if nuevo_angulo_h != angulo_h:
+        set_servo_angle(kit, 0, nuevo_angulo_h)    
+
+    if nuevo_angulo_v != angulo_v:
+        set_servo_angle(kit, 1, nuevo_angulo_v)    
+
+    return nuevo_angulo_v,nuevo_angulo_h
+
+def Control_motores(motores, tecla):
 
 #------------- PLAYGROUND -------------
 try:
-    #Limpio la terminal
     os.system('clear')
-    camara = init_camara() #Inicializamos la camara al inicio del programa
+    camara = init_camara()
+    kit = init_servos()
 
+    angulo_servo_v = 90 
+    angulo_servo_h = 90 
+    set_servo_angle(kit, 0, angulo_servo_v) 
+    set_servo_angle(kit, 1, angulo_servo_h)
+    
     while True:
-        frame = capture_frame(camara) #Capturamos un frame de la camara
-        ventanas("Camara",frame) #Mostramos el frame en una ventana
+        frame = capture_frame(camara)
+        ventanas("Camara", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'): #Si presionamos 'q' salimos del loop
+        # 1. CAPTURAMOS LA TECLA UNA SOLA VEZ
+        key = cv2.waitKey(1) & 0xFF 
+
+        # 2. ACTUALIZAMOS EL ÁNGULO USANDO EL RETORNO DE LA FUNCIÓN
+        angulo_servo_v, angulo_servo_h = Stress(kit, key, angulo_servo_v, angulo_servo_h) 
+        
+        # 3. SALIDA
+        if key == ord('q'):
             break
+    
 finally:
-    cv2.destroyAllWindows() #Cerramos todas las ventanas al finalizar el programa
-    camara.stop() #Detenemos la camara al finalizar el programa
+    cv2.destroyAllWindows()
+    if camara is not None:
+        camara.stop()
+    # Freno de seguridad para los motores DC si los añades luego
+    set_servo_angle(kit, 0, 90)
+    set_servo_angle(kit, 1, 90)
     print("Programa terminado")
-

@@ -1,205 +1,270 @@
 #-------------LIBRERIAS-------------
 
-#Librerias para sistema
+# Librerías para sistema
 import os 
 import time
 from time import sleep
-from pynput import keyboard
 
-#Librerias para raspberry/motores-servos
+# Librerías para raspberry/motores-servos
 from gpiozero import Motor
-from adafruit_servokit import ServoKit #Util para controlar el driver PCA9685
+from adafruit_servokit import ServoKit
 
-#Librerias de vision artificial
+# Librerías de visión artificial
 import cv2
 from picamera2 import Picamera2
 
-#Librerias para matematicas
+# Librerías para matemáticas
 import numpy as np
 
-#-------------Configuración para la camara-------------
+#-------------CONFIGURACIÓN CÁMARA-------------
 def init_camara():
-    '''Funcion para configurar e inicializar la camara'''
+    """
+    Inicializa y configura la cámara.
+    Devuelve el objeto cámara si todo funciona,
+    o None si ocurre algún error.
+    """
     try:
-        picam2 = Picamera2() #Inicializamos un objeto tipo camara
-        
-        #Creamos la configuración 
+        picam2 = Picamera2()
+
         config = picam2.create_video_configuration(
             main={"size": (640, 480), "format": "RGB888"}
         )
 
-        picam2.configure(config) #Aplicamos la configuración
-        picam2.start() #Iniciamos la camara
+        picam2.configure(config)
+        picam2.start()
 
-        sleep(2) #Damos tiempo a la camara para que se estabilice el sensor
+        sleep(1)  # Espera para estabilización del sensor
 
-        #Capturamos un frame para confirmar que la camara esta funcionando
-        frame = picam2.capture_array() #Capturamos un frame
-
+        frame = picam2.capture_array()
         if frame is None:
-            raise Exception("No se pudo capturar un frame de la camara.")
+            raise Exception("No se pudo capturar frame inicial.")
 
-        print("Camara inicializada correctamente.")
-        return picam2 #Devolvemos el objeto camara para usarlo en el programa principal
+        print("Cámara inicializada correctamente.")
+        return picam2
 
     except Exception as e:
-        print(f"Error al inicializar la camara: {e}")
+        print(f"Error al inicializar cámara: {e}")
         return None
 
+
 def capture_frame(camara):
-    '''
-    Funcion para capturar 
-    un frame de la camara
-
-    camara: objeto camara inicializado
-    '''
-    return camara.capture_array() #Capturamos un frame y lo devolvemos
-
-def ventanas(nombre,frame):
-    '''
-    Funcion para crear ventanas de 
-    visualizacion 
-    nombre: nombre de la ventana
-    frame: imagen a mostrar en la ventana
-    '''
-    cv2.namedWindow(nombre, cv2.WINDOW_NORMAL) #Creamos una ventana redimensionable
-    cv2.imshow(nombre, frame) #Mostramos el frame en la ventana
+    """
+    Captura un frame de la cámara.
+    """
+    return camara.capture_array()
 
 
-#-------------Configuración para los motores y servos-------------
-#Servomotores
+def mostrar_frame(nombre, frame):
+    """
+    Solo muestra el frame.
+    La ventana debe crearse UNA sola vez fuera del loop.
+    """
+    cv2.imshow(nombre, frame)
+
+
+def info_frame_angle(frame, ang_h, ang_v):
+    """
+    Dibuja información sobre el frame.
+    """
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    color = (0, 5, 255)
+
+    cv2.putText(frame, f"Servo Horizontal: {ang_h} deg",
+                (10, 30), font, 0.7, color, 2)
+
+    cv2.putText(frame, f"Servo Vertical: {ang_v} deg",
+                (10, 60), font, 0.7, color, 2)
+
+    height, width, _ = frame.shape
+    center_x, center_y = width // 2, height // 2
+
+    length = 20
+    cv2.line(frame, (center_x, center_y - length),
+             (center_x, center_y + length), (0, 255, 0), 2)
+
+    cv2.line(frame, (center_x - length, center_y),
+             (center_x + length, center_y), (0, 255, 0), 2)
+
+
+#-------------CONFIGURACIÓN SERVOS-------------
 def init_servos(num_servos=2):
-    '''
-    Funcion para configurar e 
-    inicializar los servomotores
-    
-    num_servos: numero de servos a configurar (default 2)
-    '''
-    kit = ServoKit(channels=16) #Inicializamos el driver PCA9685 con 16 canales
-    for i in range(num_servos): #Configuramos los primeros num_servos canales para los servos
-        kit.servo[i].set_pulse_width_range(500, 2500) #Configuramos el rango de pulsos para cada servo
-        kit.servo[i].actuation_range = 180 #Configuramos el rango de movimiento de cada servo a 180 grados
+    """
+    Inicializa PCA9685 y configura los servos.
+    """
+    try:
+        kit = ServoKit(channels=16)
 
-    for i in range(num_servos): #Inicializamos cada servo en la posición central (90 grados)
-        kit.servo[i].angle = 90
+        for i in range(num_servos):
+            kit.servo[i].set_pulse_width_range(500, 2500)
+            kit.servo[i].actuation_range = 180
+            kit.servo[i].angle = 90  # Posición inicial segura
 
-    print("Servos inicializados correctamente.")
-    return kit #Devolvemos el objeto kit para usarlo en el programa principal
+        print("Servos inicializados correctamente.")
+        return kit
+
+    except Exception as e:
+        print(f"Error al inicializar servos: {e}")
+        return None
+
 
 def set_servo_angle(kit, servo_index, angle):
-    '''
-    Funcion para establecer el ángulo de un servo específico
+    """
+    Establece el ángulo de un servo.
+    Incluye validación de rango para evitar daños físicos.
+    """
+    if kit is None:
+        return
 
-    kit: objeto kit de servos inicializado
-    servo_index: índice del servo al que se le quiere cambiar el ángulo
-    angle: ángulo deseado para el servo (0-180 grados)
-    '''
     if 0 <= angle <= 180:
-        kit.servo[servo_index].angle = angle #Establecemos el ángulo del servo
-        print(f"Servo {servo_index} establecido a {angle} grados.")
+        kit.servo[servo_index].angle = angle
     else:
-        print("Ángulo fuera de rango. Debe estar entre 0 y 180 grados.")
-
-#Motores DC
-def init_motor():
-    '''
-    Funcion para configurar 
-    e inicializar los motores DC
-
-    fordward: pin GPIO para movimiento hacia adelante
-    backward: pin GPIO para movimiento hacia atrás
-    '''
-    #Configuramos los motores con los pines GPIO 
-
-    motor1 = Motor(forward=17, backward=22) 
-    motor2 = Motor(forward=27, backward=23) 
-
-    #Se detienen los motores al inicio para evitar movimientos no deseados
-    motor1.stop() 
-    motor2.stop() 
-
-    print("Motores DC inicializados correctamente.")
-    return motor1, motor2 #Devolvemos los objetos de los motores para usarlos en el programa principal
-
-# Variables para controlar el tiempo de los servos sin detener el video
-ultimo_cambio = time.time()
-estado_servo = 0
+        print("Ángulo fuera de rango (0-180).")
 
 
-def Power_stop(kit,motores):
-    '''
-    Funcion para detener TODO
-    '''
-   
+#-------------CONFIGURACIÓN MOTORES-------------
+M1_FWD, M1_BWD = 17, 27
+M2_FWD, M2_BWD = 22, 23
 
-   #EJERCICIO 1
 
-def Stress(kit, tecla,angulo_v,angulo_h, paso=5):
-    '''
-    Una pequeña rutina que aumente el ángulo de 
-    5 en 5 grados cada vez que presiones una tecla 
-    (por ejemplo, la 'a' para aumentar, 'd' para disminuir).
+def init_motores():
+    """
+    Inicializa motores DC.
+    Devuelve lista [motor1, motor2] o None si falla.
+    """
+    try:
+        motor1 = Motor(forward=M1_FWD, backward=M1_BWD)
+        motor2 = Motor(forward=M2_FWD, backward=M2_BWD)
 
-    kit: objeto kit de servos inicializado
-    tecla: tecla presionada para controlar el servo
-    paso: cantidad de grados a aumentar o disminuir con cada tecla (default 5)
-    actual_v: ángulo actual del servo vertical
-    actual_h: ángulo actual del servo horizontal
-    '''
-    nuevo_angulo_v = angulo_v
-    nuevo_angulo_h = angulo_h
-    
-    # Comparamos con ord() porque cv2.waitKey devuelve enteros
+        motor1.stop()
+        motor2.stop()
+
+        print("Motores inicializados correctamente.")
+        return [motor1, motor2]
+
+    except Exception as e:
+        print(f"Error al inicializar motores: {e}")
+        return None
+
+
+def test_motores(motores, tecla):
+    """
+    Control básico con teclado.
+    """
+    if motores is None:
+        return
+
+    motor1, motor2 = motores
+
+    if tecla == ord('i'):
+        motor1.forward()
+        motor2.forward()
+    elif tecla == ord('k'):
+        motor1.backward()
+        motor2.backward()
+    elif tecla == ord('j'):
+        motor1.backward()
+        motor2.forward()
+    elif tecla == ord('l'):
+        motor1.forward()
+        motor2.backward()
+    elif tecla == ord('x'):
+        motor1.stop()
+        motor2.stop()
+
+
+#-------------CONTROL SERVOS-------------
+def controlar_servos(kit, tecla, ang_v, ang_h, paso=5):
+    """
+    Modifica ángulos según tecla.
+    Mantiene límites seguros para evitar forzar el servo.
+    """
+
+    nuevo_v = ang_v
+    nuevo_h = ang_h
+
     if tecla == ord('a'):
-        nuevo_angulo_h = min(170, nuevo_angulo_h + paso)
+        nuevo_h = min(170, ang_h + paso)
     elif tecla == ord('d'):
-        nuevo_angulo_h = max(30, nuevo_angulo_h - paso) 
+        nuevo_h = max(30, ang_h - paso)
     elif tecla == ord('w'):
-        nuevo_angulo_v = min(170, nuevo_angulo_v + paso)
+        nuevo_v = min(170, ang_v + paso)
     elif tecla == ord('s'):
-        nuevo_angulo_v = max(30, nuevo_angulo_v - paso)
+        nuevo_v = max(30, ang_v - paso)
 
-    #Ajustamos los servos individualmente
-    if nuevo_angulo_h != angulo_h:
-        set_servo_angle(kit, 0, nuevo_angulo_h)    
+    # Solo mover si realmente cambió el valor
+    if nuevo_h != ang_h:
+        set_servo_angle(kit, 0, nuevo_h)
 
-    if nuevo_angulo_v != angulo_v:
-        set_servo_angle(kit, 1, nuevo_angulo_v)    
+    if nuevo_v != ang_v:
+        set_servo_angle(kit, 1, nuevo_v)
 
-    return nuevo_angulo_v,nuevo_angulo_h
+    return nuevo_v, nuevo_h
 
-def Control_motores(motores, tecla):
 
-#------------- PLAYGROUND -------------
+#-------------PROGRAMA PRINCIPAL-------------
+camara = None
+kit = None
+motores = None
+
 try:
     os.system('clear')
+
     camara = init_camara()
+    if camara is None:
+        raise Exception("No se pudo iniciar la cámara.")
+
     kit = init_servos()
+    if kit is None:
+        raise Exception("No se pudo iniciar servos.")
 
-    angulo_servo_v = 90 
-    angulo_servo_h = 90 
-    set_servo_angle(kit, 0, angulo_servo_v) 
-    set_servo_angle(kit, 1, angulo_servo_h)
-    
+    motores = init_motores()
+
+    angulo_v = 90
+    angulo_h = 90
+
+    # Crear ventana UNA sola vez
+    cv2.namedWindow("Camara", cv2.WINDOW_NORMAL)
+
     while True:
+
         frame = capture_frame(camara)
-        ventanas("Camara", frame)
+        if frame is None:
+            print("Frame inválido.")
+            break
 
-        # 1. CAPTURAMOS LA TECLA UNA SOLA VEZ
-        key = cv2.waitKey(1) & 0xFF 
-
-        # 2. ACTUALIZAMOS EL ÁNGULO USANDO EL RETORNO DE LA FUNCIÓN
-        angulo_servo_v, angulo_servo_h = Stress(kit, key, angulo_servo_v, angulo_servo_h) 
+        # Dibujamos información sobre el frame
+        info_frame_angle(frame, angulo_h, angulo_v)
         
-        # 3. SALIDA
+
+        mostrar_frame("Camara", frame)
+
+        # IMPORTANTE:
+        # waitKey debe ir después de imshow
+        key = cv2.waitKey(1) & 0xFF
+
+        # Control motores y servos
+        test_motores(motores, key)
+        angulo_v, angulo_h = controlar_servos(
+            kit, key, angulo_v, angulo_h
+        )
+
         if key == ord('q'):
             break
-    
+
 finally:
+    print("Cerrando sistema...")
+
     cv2.destroyAllWindows()
+
     if camara is not None:
         camara.stop()
-    # Freno de seguridad para los motores DC si los añades luego
-    set_servo_angle(kit, 0, 90)
-    set_servo_angle(kit, 1, 90)
-    print("Programa terminado")
+
+    if kit is not None:
+        set_servo_angle(kit, 0, 90)
+        set_servo_angle(kit, 1, 90)
+
+    if motores is not None:
+        for motor in motores:
+            motor.stop()
+
+    print("Programa terminado correctamente.")

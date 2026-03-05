@@ -57,13 +57,14 @@ def obtener_mask(frame_bgr, low_hsv, up_hsv):
 def obtener_contornos(mask, frame_para_dibujar, min_area):
     contornos, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     centroide_detectado = None
+    w = 0 # Variable para almacenar el ancho del bounding box
     
     if contornos:
         contornos_validos = [c for c in contornos if cv2.contourArea(c) > min_area]
         if contornos_validos:
             c = max(contornos_validos, key=cv2.contourArea) #Tomamos el más grande
             x, y, w, h = cv2.boundingRect(c)
-            
+            #print(x,y,w,h)
             
             # Dibujamos sobre la copia (frame_para_dibujar ya debe estar en BGR)
             cv2.rectangle(frame_para_dibujar, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -86,6 +87,16 @@ def Estimacion_focal_px(ancho_real, ancho_bbox, distancia_real):
         return None
     focal_px = (ancho_real * distancia_real) / ancho_bbox
     return focal_px
+
+def calcular_distancia(ancho_real,ancho_bbox,focal_px = 770):
+    '''
+    calcula la distancia al objeto usando la fórmula:
+    distancia = (ancho_real * focal_px) / ancho_bbox
+    '''
+    if ancho_bbox == 0:
+        return None
+    distancia = (ancho_real * focal_px) / ancho_bbox
+    return distancia
 
 # --- Creamos trackbars para ajustar los rangos HSV en tiempo real ---
 def nothing(x):

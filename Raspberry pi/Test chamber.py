@@ -33,7 +33,7 @@ if __name__ == "__main__":
             frame_bgr_blur = cv2.GaussianBlur(frame_bgr, (5, 5), 0)
 
             mask = detectar_color(frame_bgr_blur,(0,0,255), thres_color)
-            frame,centroide,ancho_bbox = obtener_contornos(mask,frame_bgr.copy(),min_area=650)
+            frame,centroide,w_bbox = obtener_contornos(mask,frame_bgr.copy(),min_area=650)
             resultado = aplicar_mascara(cv2.cvtColor(frame_bgr_blur, cv2.COLOR_BGR2RGB), mask)
 
             if centroide:
@@ -41,9 +41,11 @@ if __name__ == "__main__":
                             cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
             cv2.circle(frame, centro_cam, 5, (255, 0, 0), -1) # Centro de la cámara
             
-            #--- Calibraciòn ---
-            #Ancho real,ancho en pixeles, distancia al objeto
-            Focal_pixel = Estimacion_focal_px(15,ancho_bbox,50) # Calibración previa con objeto de 15cm a 50cm dando un ancho en pixeles
+            #--- Calibraciòn --- objeto de 15cm2 a 50 cm
+            Distancia = calcular_distancia(15,w_bbox,focal_px=770 ) # Focal length ajustada empíricamente
+            print(f"Distancia estimada: {Distancia:.2f} cm")
+            
+           
 
 
             

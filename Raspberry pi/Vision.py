@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 from picamera2 import Picamera2
+import time 
 #-------------CONFIGURACIÓN CÁMARA-------------
 def init_camara():
     """
@@ -58,7 +59,7 @@ def obtener_contornos(mask, frame_para_dibujar, min_area):
     contornos, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     centroide_detectado = None
     w = 0 # Variable para almacenar el ancho del bounding box
-    
+    h = 0
     if contornos:
         contornos_validos = [c for c in contornos if cv2.contourArea(c) > min_area]
         if contornos_validos:
@@ -76,7 +77,7 @@ def obtener_contornos(mask, frame_para_dibujar, min_area):
                 cv2.circle(frame_para_dibujar, (cx, cy), 5, (0, 0, 255), -1)
                 centroide_detectado = (cx, cy)
                 
-    return frame_para_dibujar, centroide_detectado,w
+    return frame_para_dibujar, centroide_detectado,w,h
 
 def Estimacion_focal_px(ancho_real, ancho_bbox, distancia_real):
     '''
@@ -88,7 +89,7 @@ def Estimacion_focal_px(ancho_real, ancho_bbox, distancia_real):
     focal_px = (ancho_real * distancia_real) / ancho_bbox
     return focal_px
 
-def calcular_distancia(ancho_real,ancho_bbox,focal_px = 770):
+def calcular_distancia(ancho_real,ancho_bbox,focal_px = 973):
     '''
     calcula la distancia al objeto usando la fórmula:
     distancia = (ancho_real * focal_px) / ancho_bbox

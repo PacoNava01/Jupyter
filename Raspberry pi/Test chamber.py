@@ -2,13 +2,15 @@
 import numpy as np
 import cv2
 import os
+import time 
 
 #Librerias propias
 from Vision import *
 
 
 
-
+ultim_check = time.time()
+intervalo = 5 # segundos
 
 
 #--- Playground ---
@@ -33,8 +35,14 @@ if __name__ == "__main__":
             frame_bgr_blur = cv2.GaussianBlur(frame_bgr, (5, 5), 0)
 
             mask = detectar_color(frame_bgr_blur,(0,0,255), thres_color)
-            frame,centroide,w_bbox = obtener_contornos(mask,frame_bgr.copy(),min_area=650)
+            frame,centroide,w_bbox,h_bbox = obtener_contornos(mask,frame_bgr.copy(),min_area=650)
             resultado = aplicar_mascara(cv2.cvtColor(frame_bgr_blur, cv2.COLOR_BGR2RGB), mask)
+
+            if time.time() - ultim_check > intervalo:
+                if w_bbox and h_bbox:
+                    ultim_check = time.time()
+                    print(f"Area del objeto detectado: {w_bbox*h_bbox} px2")
+                    print(f"Distancia estimada: {calcular_distancia(15,w_bbox, focal_px=973):.2f} cm") # Focal length ajustada empíricamente objeto de 15cm2 a 50 cm
 
             if centroide:
                 cv2.putText(frame,f"crentroide pos: {centroide}",(10,30),
@@ -42,8 +50,7 @@ if __name__ == "__main__":
             cv2.circle(frame, centro_cam, 5, (255, 0, 0), -1) # Centro de la cámara
             
             #--- Calibraciòn --- objeto de 15cm2 a 50 cm
-            Distancia = calcular_distancia(15,w_bbox,focal_px=770 ) # Focal length ajustada empíricamente
-            print(f"Distancia estimada: {Distancia:.2f} cm")
+            
             
            
 

@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 import time 
+import os
+import csv
 #-------------CONFIGURACIÓN CÁMARA-------------
 def init_camara():
     """
@@ -169,6 +171,73 @@ def detectar_color(frame_bgr, color_bgr, thres_color=10):
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     
     return mask
+
+def analizar_metricas_polarizacion(frame,mask,frame_resulatado,nombre_archivo):
+    '''
+    Calcula el promedio de los 3 canales de la escala
+    HSV en la zona detectada.
+    Pide el angulo y toda la info la guarda en un csv
+    '''
+    carpeta = "Capturas_pol"
+    if not os.path.exists(carpeta):
+        os.makedirs(carpeta)
+    try:
+        #pedimos el angulo
+        angulo = float(input("\nIngresa el angulo del polarizxador (0-180)"))
+    except ValueError:
+        print("Angulo invalido. Captura cancelada")
+        return 
+    #Converimos a HSV para analizar los componentes 
+    hsv_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
+    #Aplicamos la mascara para obtener solo los pixeles del objeto
+    pixeles_detectados = hsv_frame[mask > 0]
+
+    if pixeles_detectados.size == 0:
+        print(f"No hay pixeles en la mascara. Ajustar el color o polarizador")
+        v_mean,h_mean,s_meann_ìx = 0,0,0,0
+
+    else:
+        #Calculamos los promedios de los 3 canales
+        h_mean = np.mean(pixeles_detectados[:,0])
+        s_mean = np.mean(pixeles_detectados[:,1])
+        v_mean = np.mean(pixeles_detectados[:,2])
+        n_pix = len(pixeles_detectados)
+
+    #GUardar imagenes png
+    nombre_frame = f"{carpeta}/frame_pol{int(angulo)}grados.png"
+    nombre_res = f"{carpeta}/Resultado_pol{int(angulo)}grados.png"
+
+    cv2.imwrite(nombre_frame,frame)
+    cv2.imwrite(nombre_res,frame_resulatado)
+
+    #El valor de V (brillo) es el que deberia seguir la Ley de malus
+    #EL valor H (tono) deberia permanecer cte
+    
+    #Guardar en csv
+    file_exists = os.path.isfile(nombre_archivo)
+    #Definimos el orden de las columnas
+    campos = ["angulo","h_prom","s_prom","v_prom","num_pixeles","tiempo"]
+
+    with open(nombre_archivo,mode='a',newline='') as f:
+            writer = csv.DictWriter(f,fieldnames=campos)
+
+            #Escribir el encabezado solo una primera vez
+            if not file_exists:
+                writer.writeheader()
+
+    datos = {
+        "angulo": angulo,
+        "h_prom": round(h_mean,2),
+        "s_prom": round(s_mean,2),
+        "v_prom": round(v_mean,2),
+        "num_pixeles": n_pix,
+        "tiempo":time.strftime("%H:%M:%S")
+    }
+
+    writer.writerow(datos)
+    print(f"Datos guardados para el angulo {datos['angulo']} Grados")
+
+
 
 def aplicar_mascara(frame_bgr, mask):
     """

@@ -102,29 +102,6 @@ def calcular_distancia(ancho_real,ancho_bbox,focal_px = 973):
     return distancia
 
 # --- Creamos trackbars para ajustar los rangos HSV en tiempo real ---
-def nothing(x):
-    pass
-
-
-def crear_trackbar(nombre_ventana):
-    cv2.createTrackbar("Low H", nombre_ventana, 0, 179, nothing)
-    cv2.createTrackbar("Low S", nombre_ventana, 0, 255, nothing)
-    cv2.createTrackbar("Low V", nombre_ventana, 0, 255, nothing)
-    cv2.createTrackbar("Up H", nombre_ventana, 0, 179, nothing)
-    cv2.createTrackbar("Up S", nombre_ventana, 0, 255, nothing)
-    cv2.createTrackbar("Up V", nombre_ventana, 0, 255, nothing)
-
-def trackbar_val(nombre_ventana):
-    low_h = cv2.getTrackbarPos("Low H", nombre_ventana)
-    low_s = cv2.getTrackbarPos("Low S", nombre_ventana)
-    low_v = cv2.getTrackbarPos("Low V", nombre_ventana)
-    up_h = cv2.getTrackbarPos("Up H", nombre_ventana)
-    up_s = cv2.getTrackbarPos("Up S", nombre_ventana)
-    up_v = cv2.getTrackbarPos("Up V", nombre_ventana)
-
-    low = np.array([low_h, low_s, low_v], dtype=np.uint8)
-    up = np.array([up_h, up_s, up_v], dtype=np.uint8)
-    return low, up
 
 def bgr_a_hsv(b, g, r):
     color_bgr = np.uint8([[[b, g, r]]])
@@ -194,7 +171,7 @@ def analizar_metricas_polarizacion(frame,mask,frame_resulatado,nombre_archivo):
 
     if pixeles_detectados.size == 0:
         print(f"No hay pixeles en la mascara. Ajustar el color o polarizador")
-        v_mean,h_mean,s_meann_ìx = 0,0,0,0
+        v_mean,h_mean,s_mean,n_pix = 0,0,0,0
 
     else:
         #Calculamos los promedios de los 3 canales
@@ -225,17 +202,17 @@ def analizar_metricas_polarizacion(frame,mask,frame_resulatado,nombre_archivo):
             if not file_exists:
                 writer.writeheader()
 
-    datos = {
-        "angulo": angulo,
-        "h_prom": round(h_mean,2),
-        "s_prom": round(s_mean,2),
-        "v_prom": round(v_mean,2),
-        "num_pixeles": n_pix,
-        "tiempo":time.strftime("%H:%M:%S")
-    }
+            datos = {
+                "angulo": angulo,
+                "h_prom": round(h_mean,2),
+                "s_prom": round(s_mean,2),
+                "v_prom": round(v_mean,2),
+                "num_pixeles": n_pix,
+                "tiempo":time.strftime("%H:%M:%S")
+            }
 
-    writer.writerow(datos)
-    print(f"Datos guardados para el angulo {datos['angulo']} Grados")
+            writer.writerow(datos)
+            print(f"Datos guardados para el angulo {datos['angulo']} Grados")
 
 
 

@@ -200,6 +200,16 @@ def controlar_servos(kit, tecla, ang_v, ang_h, paso=5):
 
     return nuevo_v, nuevo_h
 
+#Imporamos de otro programa
+from Detector2 import obtener_mask, procesar_contornos, low_red1, up_red1, low_red2, up_red2
+# --- Rangos Rojos (Ajustados para RGB -> HSV) ---
+low_red1 = np.array([0, 100, 50], dtype=np.uint8)
+up_red1 = np.array([10, 255, 255], dtype=np.uint8)
+low_red2 = np.array([170, 100, 50], dtype=np.uint8)
+up_red2 = np.array([180, 255, 255], dtype=np.uint8)
+
+
+
 
 #-------------PROGRAMA PRINCIPAL-------------
 camara = None
@@ -210,6 +220,7 @@ try:
     os.system('clear')
 
     camara = init_camara()
+    
     if camara is None:
         raise Exception("No se pudo iniciar la cámara.")
 
@@ -217,13 +228,15 @@ try:
     if kit is None:
         raise Exception("No se pudo iniciar servos.")
 
-    motores = init_motores()
+    #motores = init_motores()
 
     angulo_v = 90
     angulo_h = 90
 
     # Crear ventana UNA sola vez
-    cv2.namedWindow("Camara", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("Deteccion",cv2.WINDOW_NORMAL)
+    cv2.namedWindow("Mascara",cv2.WINDOW_NORMAL)
+
 
     while True:
 
@@ -231,11 +244,24 @@ try:
         if frame is None:
             print("Frame inválido.")
             break
+        
+        mask1 = obtener_mask(frame, low_red1, up_red1)
+        mask2 = obtener_mask(frame, low_red2, up_red2)
+        mask_red = cv2.add(mask1, mask2)
+
+        frame_con_deteccion, centroide = procesar_contornos(mask_red, frame.copy(), min_area=500)
+
+        if centroide:
+            cv2.putText(frame_con_deteccion, f"Pos: {centroide}", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         # Dibujamos información sobre el frame
-        info_frame_angle(frame, angulo_h, angulo_v)
+        info_frame_angle(frame_con_deteccion, angulo_h, angulo_v)
         
+        mostrar_frame("Deteccion", frame_con_deteccion)
+        mostrar_frame("Mascara", mask_red)
 
+      
         mostrar_frame("Camara", frame)
 
         # IMPORTANTE:
@@ -243,12 +269,12 @@ try:
         key = cv2.waitKey(1) & 0xFF
 
         # Control motores y servos
-        test_motores(motores, key)
+        #test_motores(motores, key)
         angulo_v, angulo_h = controlar_servos(
             kit, key, angulo_v, angulo_h
         )
 
-        if key == ord('q'):
+        if key == 13:
             break
 
 finally:

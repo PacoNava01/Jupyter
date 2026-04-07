@@ -29,6 +29,27 @@ class Carro:
         v_der = max(0, min(1, vel_der))
         self.robot.left_motor.backward(v_izq)
         self.robot.right_motor.backward(v_der)
+    
+    def girar(self,vel_izq,vel_der):
+        #Obtenemos valores absolutos y los limitamos a [0, 1]
+        v_izq_abs = max(0, min(1, abs(vel_izq)))
+        v_der_abs = max(0, min(1, abs(vel_der)))
+
+        # Caso giro sobre su eje (Derecha): Izquierda (+) y Derecha (-)
+        if vel_izq > 0 and vel_der < 0:
+            self.detener()
+            self.robot.left_motor.forward(v_izq_abs)
+            self.robot.right_motor.backward(v_der_abs)
+
+        # Caso giro sobre su eje (Izquierda): Izquierda (-) y Derecha (+)
+        elif vel_izq < 0 and vel_der > 0:
+            self.detener()
+            self.robot.left_motor.backward(v_izq_abs)
+            self.robot.right_motor.forward(v_der_abs)
+        
+        else:
+            #No hacemos nada
+            pass
 
     def detener(self):
         self.robot.stop()

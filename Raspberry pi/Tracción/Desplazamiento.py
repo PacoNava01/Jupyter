@@ -17,45 +17,43 @@ class Carro:
         motor_der = Motor(forward=right_pins[0], backward=right_pins[1], enable=right_pins[2])
         
         self.robot = Robot(left=motor_izq, right=motor_der)
-
-    def avanzar(self, vel_izq, vel_der):
-        v_izq = max(0, min(1, vel_izq))
-        v_der = max(0, min(1, vel_der))
-        self.robot.left_motor.forward(v_izq)
-        self.robot.right_motor.forward(v_der)
-
-    def retroceder(self, vel_izq, vel_der):
-        v_izq = max(0, min(1, vel_izq))
-        v_der = max(0, min(1, vel_der))
-        self.robot.left_motor.backward(v_izq)
-        self.robot.right_motor.backward(v_der)
-    
-    def girar(self,vel_izq,vel_der):
-        #Obtenemos valores absolutos y los limitamos a [0, 1]
-        v_izq_abs = max(0, min(1, abs(vel_izq)))
-        v_der_abs = max(0, min(1, abs(vel_der)))
-
-        # Caso giro sobre su eje (Derecha): Izquierda (+) y Derecha (-)
-        if vel_izq > 0 and vel_der < 0:
-            self.detener()
-            self.robot.left_motor.forward(v_izq_abs)
-            self.robot.right_motor.backward(v_der_abs)
-
-        # Caso giro sobre su eje (Izquierda): Izquierda (-) y Derecha (+)
-        elif vel_izq < 0 and vel_der > 0:
-            self.detener()
-            self.robot.left_motor.backward(v_izq_abs)
-            self.robot.right_motor.forward(v_der_abs)
         
-        else:
-            #No hacemos nada
-            pass
+    #Metodo principal
+    def mover(self, vel_izq, vel_der):
+        '''
+        control directo tipo joystick
+        -1.0 a 1.0
+        Negativo = atrás
+        Positivo = adelante
+        '''
+        
+        vel_izq = max(-1, min(1, vel_izq))
+        vel_der = max(-1, min(1, vel_der))
+
+        self.robot.left_motor.value = vel_izq
+        self.robot.right_motor.value = vel_der
+        
+        
+    # --- Metodos simples ---
+    def avanzar(self, velocidad=0.5):
+        self.mover(velocidad, velocidad)
+
+    def retroceder(self, velocidad=0.5):
+        self.mover(-velocidad, -velocidad)    
+    
+    def girar_izquierda(self, velocidad=0.5):
+        self.mover(-velocidad, velocidad)
+
+    def girar_derecha(self, velocidad=0.5):
+        self.mover(velocidad, -velocidad)
+            
 
     def detener(self):
         self.robot.stop()
 
     def apagar_driver(self):
         # Opcional: pone el driver en modo bajo consumo
+        self.detener()
         self.stby.off()
 
 #--- Playground ---

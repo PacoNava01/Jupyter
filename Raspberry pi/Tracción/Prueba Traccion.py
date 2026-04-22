@@ -1,39 +1,70 @@
-print(" TEST INICIO")
+# --- Librerias propias---
+from Desplazamiento import Carro
 
-# GPIOZERO
-try:
-    from gpiozero import LED
-    print(" gpiozero OK")
-except Exception as e:
-    print("gpiozero ERROR:", e)
+# --- Librerias ---
+import numpy as np
+import cv2
+import time
+import os
 
-# OpenCV
-try:
-    import cv2
-    print(" OpenCV OK:", cv2.__version__)
-except Exception as e:
-    print(" OpenCV ERROR:", e)
+if __name__ == "__main__":
+    #Pines: (IN1,IN2,ENB) para cada lado
+    pines_izq = (17,27,12)
+    pines_der = (23,22,13)
+    pin_stby = 24
 
-# NumPy
-try:
-    import numpy as np
-    print(" numpy OK:", np.__version__)
-except Exception as e:
-    print(" numpy ERROR:", e)
+    carrito = None
+    
+    cv2.namedWindow("Control Carrito")
 
-# Adafruit Blinka
-try:
-    import board
-    print(" Adafruit Blinka OK")
-except Exception as e:
-    print(" Adafruit ERROR:", e)
+    try:
+        carrito = Carro(pines_izq,pines_der)
+        print("Robot activado...")
+        moviendose = False
+        intervalo = 2
+        ultim_check = time.time()
 
-try:
-    import picamera2
-    print(" picamera2 OK")
-except Exception as e:
-    print(" picamera2 ERROR:", e)
+        while True:
+            tecla = cv2.waitKey(1) & 0xFF
+            tiempo_actual = time.time()
 
 
+            # --- TEMPORIZADOR DE MEDICIÓN ---
+            if moviendose and (tiempo_actual - ultim_check) > intervalo:
+                carrito.detener()
+                print("Intervalo cumplido: Deteniendo para medición...")
+                moviendose = False
+                impulso_activo = False
+            
+            # --- CONTROL DE TECLADO ---
+            if tecla == ord('w'):
+                print("Avanzando...")
+                carrito.mover(0.5,0.5)
+                ultim_check = tiempo_actual
+                moviendose = True
+                
 
-print(" TEST FINAL")
+            elif tecla == ord('s'):
+                print("Retrocediendo...")
+                carrito.mover(-1,-1)
+                ultim_check = tiempo_actual
+                moviendose = True
+            
+            elif tecla == ord(' '):
+                carrito.detener()
+                moviendose = False
+                impulso_activo = False
+                print("Parada de emergencia")
+
+            elif tecla == 27:  # ESC
+                break
+                
+
+    except KeyboardInterrupt:
+        if carrito is not None:
+            carrito.detener()
+            carrito.apagar_driver()
+            print("\nPrograma terminado y driver en Standby")
+    
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")

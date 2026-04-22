@@ -11,8 +11,8 @@ import os
 
 if __name__ == "__main__":
     #(forward,backward,enable)
-    pines_izq = (17,27,12)
-    pines_der = (23,22,13)
+    pines_izq = (17,27,13)
+    pines_der = (23,22,12)
     stby = 24
 
     carrito = None

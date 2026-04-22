@@ -1,3 +1,7 @@
+from gpiozero import Robot, Motor, OutputDevice
+import os
+import cv2
+
 class Carro:
     # Nuevos coeficientes ajustados para escala 0.0 - 1.0
     COEFS = {

@@ -14,11 +14,11 @@ class PID:
         self.kD = kD
         self.last_error = 0
         self.integral = 0
-        self.las_time = time.time()
+        self.last_time = time.time()
     
     def update(self,error):
         now = time.time()
-        dt = now - self.las_time()
+        dt = now - self.last_time()
         if dt <= 0:
             return 0
     
@@ -31,7 +31,7 @@ class PID:
         D = self.kD * (error-self.last_error)/dt
 
         self.last_error = error
-        self.las_time = now
+        self.last_time = now
 
         return P + I + D
 

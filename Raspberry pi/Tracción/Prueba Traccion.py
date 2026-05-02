@@ -1,14 +1,9 @@
-# --- Librerias propias---
 from Desplazamiento import Carro
-
-# --- Librerias ---
 import numpy as np
 import cv2
 import time
-import os
 
 if __name__ == "__main__":
-    #Pines: (IN1,IN2,ENB) para cada lado
     pines_izq = (17,27,12)
     pines_der = (23,22,13)
     pin_stby = 24
@@ -18,53 +13,60 @@ if __name__ == "__main__":
     cv2.namedWindow("Control Carrito")
 
     try:
-        carrito = Carro(pines_izq,pines_der)
+        carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
         print("Robot activado...")
+
         moviendose = False
+        impulso_activo = False
         intervalo = 2
         ultim_check = time.time()
 
         while True:
+            frame_dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+            cv2.imshow("Control Carrito", frame_dummy)
+
             tecla = cv2.waitKey(1) & 0xFF
             tiempo_actual = time.time()
 
-
-            # --- TEMPORIZADOR DE MEDICIÓN ---
+            # --- TEMPORIZADOR ---
             if moviendose and (tiempo_actual - ultim_check) > intervalo:
                 carrito.detener()
-                print("Intervalo cumplido: Deteniendo para medición...")
+                print("Intervalo cumplido: Detenido")
                 moviendose = False
-                impulso_activo = False
-            
-            # --- CONTROL DE TECLADO ---
+
+            # --- CONTROLES ---
             if tecla == ord('w'):
-                print("Avanzando...")
                 carrito.mover(0.5,0.5)
+                print("Avanzando...")
                 ultim_check = tiempo_actual
                 moviendose = True
-                
 
             elif tecla == ord('s'):
+                carrito.mover(-0.5,0.5)  
                 print("Retrocediendo...")
-                carrito.mover(-1,-1)
                 ultim_check = tiempo_actual
                 moviendose = True
             
+            elif tecla == ord('d'):
+                carrito.mover(0.5,-0.5)  
+                print("Retrocediendo...")
+                ultim_check = tiempo_actual
+                moviendose = True
+
             elif tecla == ord(' '):
                 carrito.detener()
                 moviendose = False
-                impulso_activo = False
                 print("Parada de emergencia")
 
-            elif tecla == 27:  # ESC
+            elif tecla == 27:
                 break
-                
 
-    except KeyboardInterrupt:
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
+
+    finally:
         if carrito is not None:
             carrito.detener()
             carrito.apagar_driver()
-            print("\nPrograma terminado y driver en Standby")
-    
-    except Exception as e:
-        print(f"Ocurrió un error: {e}")
+        cv2.destroyAllWindows()
+        print("Sistema apagado correctamente")

@@ -1,0 +1,143 @@
+Script resumen
+Descripción del sistema desarrollado (visión por computadora con ML ligero)
+
+En este proyecto se desarrolló un sistema de visión por computadora embebido orientado a la detección robusta de objetos en tiempo real utilizando una Raspberry Pi. El objetivo principal fue mejorar la segmentación basada únicamente en color mediante la incorporación de un modelo de aprendizaje automático ligero capaz de discriminar entre el objeto de interés y elementos no deseados del entorno, como la mano del usuario o ruido de iluminación.
+
+🧠 Enfoque general del sistema
+
+El sistema implementado sigue una arquitectura híbrida compuesta por dos etapas principales:
+
+Preprocesamiento basado en color (HSV)
+Clasificación mediante aprendizaje automático supervisado
+
+Esta combinación permite reducir la dependencia exclusiva de umbrales de color, los cuales suelen ser sensibles a variaciones de iluminación, sombras y condiciones del entorno.
+
+🎥 Captura y preprocesamiento de imagen
+
+La adquisición de imágenes se realizó mediante una cámara integrada a la Raspberry Pi utilizando la librería Picamera2. Cada frame capturado es transformado al espacio de color HSV, lo cual facilita la segmentación inicial del objeto de interés.
+
+Posteriormente, se aplica una máscara por rango de color para aislar regiones potencialmente relevantes. Esta etapa actúa como un filtro inicial que reduce la cantidad de información que el sistema debe procesar en etapas posteriores.
+
+🔍 Extracción de características
+
+A partir de los contornos detectados en la máscara HSV, se extraen características geométricas y cromáticas del objeto, incluyendo:
+
+Área del contorno
+Relación de aspecto (ancho/alto del bounding box)
+Circularidad (medida de compacidad de la forma)
+Promedio de componentes de color (H, S, V) dentro del contorno
+
+Estas características permiten representar cada región detectada como un vector numérico que describe tanto su forma como su color.
+
+🤖 Modelo de aprendizaje automático
+
+Con el objetivo de mejorar la precisión de la segmentación, se entrenó un modelo supervisado ligero utilizando Random Forest.
+
+El modelo fue alimentado con un dataset construido manualmente a partir de capturas reales, donde cada muestra fue etiquetada como:
+
+Clase 1: objeto de interés
+Clase 0: fondo o elementos no deseados
+
+El modelo aprende a diferenciar patrones combinando información de forma y color, lo que permite una clasificación más robusta que los métodos tradicionales basados únicamente en umbrales.
+
+⚙️ Integración en tiempo real
+
+Una vez entrenado, el modelo se integra dentro del pipeline de visión en tiempo real. Para cada frame:
+
+Se genera una máscara HSV inicial
+Se detectan contornos candidatos
+Se extraen características de cada contorno
+El modelo clasifica cada región
+Se genera una máscara final depurada con solo los objetos válidos
+
+Este proceso permite eliminar falsos positivos como partes de la mano o ruido visual, manteniendo únicamente el objeto de interés.
+
+📊 Resultados preliminares
+
+El modelo obtuvo una precisión aproximada del 96% en el conjunto de prueba, demostrando que la combinación de características geométricas y cromáticas es suficiente para lograr una segmentación robusta en entornos controlados.
+
+Además, el sistema demostró ser viable para ejecución en hardware de bajo costo como la Raspberry Pi, manteniendo un desempeño adecuado en tiempo real.
+
+🎯 Conclusión del módulo de visión
+
+El sistema desarrollado demuestra que es posible mejorar significativamente la segmentación de objetos mediante la combinación de técnicas clásicas de visión por computadora con modelos de aprendizaje automático ligeros. Esta aproximación híbrida reduce la dependencia de umbrales manuales y mejora la robustez ante condiciones variables de iluminación y ruido.
+
+------ Prompt -----
+
+Quiero implementar un sistema de tracking de objetos en tiempo real en Raspberry Pi, basado en el sistema de visión que ya tengo desarrollado.
+
+🧠 Contexto del sistema actual:
+
+He construido un pipeline de visión por computadora con las siguientes etapas:
+
+Captura de video con Picamera2 en Raspberry Pi
+Conversión de frames a espacio HSV
+Segmentación inicial por color (HSV thresholding)
+Detección de contornos en la máscara
+Extracción de características por contorno:
+área
+relación de aspecto
+circularidad
+media de color HSV
+Clasificación de contornos mediante un modelo de Machine Learning ligero (Random Forest)
+Generación de una máscara final donde solo queda el objeto válido
+
+El sistema ya es capaz de filtrar ruido como la mano del usuario y detectar correctamente el objeto de interés en tiempo real.
+
+🎯 Objetivo nuevo:
+
+Quiero añadir un módulo de tracking de objetos que permita:
+
+Seguir el objeto detectado frame a frame
+Mantener su identidad aunque haya pequeñas pérdidas de detección
+Estimar su posición (centroide) de forma estable
+Reducir saltos o inestabilidad en la detección
+Mantener compatibilidad con el pipeline actual (HSV + ML)
+⚙️ Restricciones del sistema:
+Debe ser ligero para Raspberry Pi (CPU únicamente)
+No usar modelos pesados de deep learning
+Debe integrarse con OpenCV y Python
+Debe funcionar en tiempo real (mínimo 15–30 FPS idealmente)
+Debe usar la salida del modelo ML como entrada del tracking (máscara final o centroides)
+🧩 Información disponible por frame:
+
+Después del pipeline actual, dispongo de:
+
+Máscara final del objeto (binary mask)
+Contornos detectados
+Centroide del objeto principal (x, y)
+Bounding box opcional
+💡 Lo que quiero implementar:
+
+Propón e implementa una solución de tracking adecuada para este caso, por ejemplo:
+
+Centroid tracking
+Kalman filter ligero
+SORT simplificado
+o combinación de centroid + suavizado temporal
+
+El sistema debe:
+
+Asignar IDs a los objetos detectados
+Mantener el ID aunque haya pequeñas pérdidas de detección
+Suavizar el movimiento del centroide
+Manejar desaparición del objeto durante varios frames
+📦 Entregable esperado:
+Explicación del enfoque elegido
+Estructura del módulo de tracking dentro de mi arquitectura (vision/)
+Código en Python listo para integrarse con mi pipeline actual
+Ejemplo de integración con el output del ObjectDetector
+🧠 Importante:
+
+El tracking debe construirse encima del sistema actual, no reemplazarlo. Debe aprovechar la máscara final o el centroide generado por el modelo ML.
+
+🎯 FIN DEL PROMPT
+💡 Por qué este prompt es bueno
+
+Este prompt ya deja claro:
+
+tu arquitectura real
+tus restricciones (Raspberry Pi)
+tu pipeline actual
+lo que NO quieres romper
+lo que esperas como output

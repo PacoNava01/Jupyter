@@ -22,9 +22,14 @@ python3-pip \
 python3-venv \
 git
 
+echo " Instalando librerías de Machine Learning..."
+pip install \
+scikit-learn \
+joblib
+
 echo " Creando entorno virtual .pacon..."
 if [ -d ".pacon" ]; then
-    echo "⚠️ .pacon ya existe, omitiendo creación"
+    echo " .pacon ya existe, omitiendo creación"
 else
     python3 -m venv .pacon --system-site-packages
 fi

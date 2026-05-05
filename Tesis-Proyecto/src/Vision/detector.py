@@ -63,8 +63,8 @@ def obtener_mask(frame_bgr, low_hsv, up_hsv):
     mask = cv2.inRange(hsv, low_hsv, up_hsv)
 
     kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.GaussianBlur(mask, (5, 5), 0)
 
     return mask

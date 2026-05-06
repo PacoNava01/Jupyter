@@ -6,47 +6,40 @@ import cv2
 import numpy as np
 
 
-# Modelo (opcional, realmente actúa como filtro sobre HSV)
+# ----------------------------
+# INIT
+# ----------------------------
+
 detector = ObjectDetector("Jupyter/Tesis-Proyecto/data/model.pkl")
 
-# Cámara
 cam = init_cam()
 if cam is None:
     exit()
 
 # Servo (solo eje X)
 servo_x, _ = init_servos()
-servo_x_angle = 80  # posición inicial
+servo_x_angle = 90  # centro inicial
 
-# Centro del frame (referencia)
+# Centro del frame
 frame_center_x = 320
 
-# ----------------------------
-# TRACKING SIMPLE (SIN TRACKER)
-# ----------------------------
-# Guarda el último objeto seguido
+# Última posición del objeto (para continuidad)
 prev_target = None
 
-# ----------------------------
-# SUAVIZADO (EMA)
-# ----------------------------
-alpha = 0.4  # menor = más reactivo
+# Suavizado (EMA)
+alpha = 0.5
 
 # ----------------------------
-# PID CONFIG
+# CONTROL PROPORCIONAL
 # ----------------------------
-# Kp: responde al error actual 
-# Ki: corrige error acumulado (offset) 
-# Kd: reduce oscilaciones (suaviza cambios bruscos)
-Kp = 10
-Ki = 0.0   # desactivado por estabilidad
-Kd = 0.1
+# Relación pixel → grados ( parámetro más importante)
+gain = 0.12
 
-integral_x = 0
-prev_error_x = 0
+# Límite de velocidad del servo (evita saltos bruscos)
+max_step = 2
 
-# Zona muerta (en error normalizado)
-dead_zone = 0.05
+# Zona muerta en pixeles (evita vibración)
+dead_zone_px = 10
 
 # ----------------------------
 # HSV rojo
@@ -58,33 +51,33 @@ low_red2 = np.array([170, 120, 90])
 up_red2  = np.array([180, 255, 255])
 
 print("Iniciando prueba en tiempo real...")
-Servo2Pos(servo_x, 80)
+Servo2Pos(servo_x, servo_x_angle)
+
 
 # ----------------------------
 # LOOP PRINCIPAL
 # ----------------------------
 while True:
 
-    # Captura y orientación
     frame = cam.capture_array()
     frame = cv2.rotate(frame, cv2.ROTATE_180)
 
     display_frame = frame.copy()
 
     # ----------------------------
-    # 1. DETECCIÓN POR COLOR (HSV)
+    # 1. DETECCIÓN HSV
     # ----------------------------
     mask1 = obtener_mask(frame, low_red1, up_red1)
     mask2 = obtener_mask(frame, low_red2, up_red2)
     hsv_mask = cv2.add(mask1, mask2)
 
     # ----------------------------
-    # 2. FILTRADO (pseudo ML)
+    # 2. FILTRADO
     # ----------------------------
     final_mask = detector.process_frame(frame, hsv_mask)
 
     # ----------------------------
-    # 3. CONTORNOS → CANDIDATOS
+    # 3. CONTORNOS
     # ----------------------------
     contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -93,7 +86,6 @@ while True:
     for c in contours:
         area = cv2.contourArea(c)
 
-        # Filtrar ruido
         if area < 550:
             continue
 
@@ -113,23 +105,29 @@ while True:
 
     if len(candidates) > 0:
 
-        # Primer frame → elegir el más grande
+        # usar siempre el más grande
+        largest = max(candidates, key=lambda x: x[2])
+        largest_centroid = largest[:2]
+
         if prev_target is None:
-            best_centroid = max(candidates, key=lambda x: x[2])[:2]
-
+            best_centroid = largest_centroid
         else:
-            # Elegir el más cercano al anterior (continuidad)
-            min_dist = float("inf")
+            # si no "salta", seguir el grande
+            dist = abs(largest_centroid[0] - prev_target[0])
 
-            for (cx, cy, area) in candidates:
-                dist = abs(cx - prev_target[0])  # solo eje X
-
-                if dist < min_dist:
-                    min_dist = dist
-                    best_centroid = (cx, cy)
+            if dist < 120:
+                best_centroid = largest_centroid
+            else:
+                # transición suave
+                min_dist = float("inf")
+                for (cx, cy, area) in candidates:
+                    d = abs(cx - prev_target[0])
+                    if d < min_dist:
+                        min_dist = d
+                        best_centroid = (cx, cy)
 
     # ----------------------------
-    # 5. CONTROL (SI HAY OBJETO)
+    # 5. CONTROL (SIN PID)
     # ----------------------------
     if best_centroid is not None:
 
@@ -144,45 +142,34 @@ while True:
 
         prev_target = (smooth_x, smooth_y)
 
-        # -------- ERROR NORMALIZADO --------
-        error_x = (smooth_x - frame_center_x) / frame_center_x
+        # -------- ERROR EN PIXELES --------
+        error_px = smooth_x - frame_center_x
 
-        # Zona muerta (evita jitter)
-        if abs(error_x) < dead_zone:
-            error_x = 0
+        # zona muerta
+        if abs(error_px) < dead_zone_px:
+            error_px = 0
 
-        # -------- PID (P + D) --------
-        integral_x += error_x
-        derivative_x = error_x - prev_error_x
+        # -------- CONTROL DIRECTO --------
+        target_angle = 90 - error_px * gain
 
-        control = (Kp * error_x) + (Kd * derivative_x)
-        prev_error_x = error_x
-
-        # -------- ÁNGULO OBJETIVO --------
-        target_angle = 80 - control
-
-        # Limitar rango físico
-        target_angle = max(20, min(140, target_angle))
+        # limitar rango físico
+        target_angle = max(10, min(170, target_angle))
 
         # -------- LIMITADOR DE VELOCIDAD --------
-        # Evita movimientos bruscos
-        max_step = 2  # grados por frame
-
         delta = target_angle - servo_x_angle
         delta = max(-max_step, min(max_step, delta))
 
         servo_x_angle += delta
 
-        # Mover servo
+        # mover servo
         Servo2Pos(servo_x, servo_x_angle)
 
-        # Dibujar objetivo activo
+        # dibujar objetivo activo
         cv2.circle(display_frame, (smooth_x, smooth_y), 8, (0, 255, 0), 2)
 
     # ----------------------------
-    # DEBUG VISUAL
+    # DEBUG
     # ----------------------------
-    # Dibujar todos los candidatos detectados
     for (cx, cy, area) in candidates:
         cv2.circle(display_frame, (cx, cy), 4, (0, 0, 255), -1)
 

@@ -4,8 +4,10 @@ import joblib
 
 
 class ObjectDetector:
-    def __init__(self, model_path):
+    def __init__(self, model_path,scaler_path):
         self.model = joblib.load(model_path)
+        self.scaler = joblib.load(scaler_path)
+
         #Precalculamos el kernel para operaciones morfologicas
         self.Kernel = np.ones((5,5),np.uint8)
 
@@ -55,6 +57,18 @@ class ObjectDetector:
                          solidity,h_mean,s_mean,v_mean],
                          dtype=np.float32)
     
+    def classify_contour(self,contour,frame_hsv): #Cambio agregado
+        '''
+        comit agregado solo para que funcione
+        '''
+        features = self.extract_features(contour,frame_hsv)
+        #1. Escalar losdatosantesdepredecir
+        features_scaled = self.scaler.transform([features])
+        #2. Predecir
+        prediction = self.model.predict([features_scaled])
+        return prediction[0] ==1
+
+        
 
     def process_frame(self, frame_hsv, hsv_mask):
         '''

@@ -25,7 +25,8 @@ git
 echo " Instalando librerías de Machine Learning..."
 pip install \
 scikit-learn \
-joblib
+joblib \
+pandas
 
 echo " Creando entorno virtual .pacon..."
 if [ -d ".pacon" ]; then

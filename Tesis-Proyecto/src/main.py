@@ -58,7 +58,7 @@ detection_timeout = 0.2 #segundos
 
 # --- Sincronización PID ----
 #kP: Reaccion inicial, kD: Amortigua el temblor, kI: Presicion final
-#Valores departida [0.06,,0.02,0.0005]
+#Valores departida [0.06,,0.02,0.0005] ajustar a gusto
 pid_x = PID(kP=0.01,kI=0.02,kD=0.0005)
 
 

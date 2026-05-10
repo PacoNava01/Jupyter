@@ -46,6 +46,7 @@ joblib.dump(model, "Jupyter/Tesis-Proyecto/data/model.pkl")
 joblib.dump(scaler,"Jupyter/Tesis-Proyecto/data/scaler.pkl")
 
 print("\n Modelo y Escalador guardados correctamente")
+
 '''
  === Reporte de clasificacion ===
                precision    recall  f1-score   support

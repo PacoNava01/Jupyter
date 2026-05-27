@@ -54,13 +54,12 @@ class ObjectDetector:
         
         # --- CORRECCIÓN 1: Indentación y Escalado ---
         if len(candidates_features) > 0:
-            # Primero escalamos TODO el batch, luego predecimos
+            # Primero escalamos todo el batch, luego predecimos
             features_scaled = self.scaler.transform(candidates_features)
             predictions = self.model.predict(features_scaled)
 
             for i, is_target in enumerate(predictions):
                 if is_target == 1:
-                    # CORRECCIÓN 2: El nombre correcto es drawContours, no drawnContours
                     cv2.drawContours(output_mask, [candidates_contours[i]], -1, 255, -1)
         
         return output_mask

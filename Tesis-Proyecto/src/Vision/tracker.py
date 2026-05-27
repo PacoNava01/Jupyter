@@ -1,14 +1,6 @@
 import numpy as np
 from scipy.spatial import distance
 
-'''
-asigna IDs a objetos
-mantiene identidad entre frames
-elimina objetos perdidos
-soporta múltiples objetos
-funciona solo con centroides
-
-'''
 class CentroidTracker:
     def __init__(self, max_disappeared=10, max_distance=100):
         """

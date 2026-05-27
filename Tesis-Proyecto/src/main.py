@@ -36,8 +36,8 @@ class PID:
         return P + I + D
 
 # --- Configuracion de archivos ---
-detector = ObjectDetector("Jupyter/Tesis-Proyecto/data/model.pkl",
-                          "Jupyter/Tesis-Proyecto/data/scaler.pkl")
+detector = ObjectDetector("/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/model.pkl",
+                          "/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/scaler.pkl")
 
 cam = init_cam()
 

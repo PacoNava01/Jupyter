@@ -13,7 +13,7 @@ if __name__ == "__main__":
     cv2.namedWindow("Control Carrito")
 
     try:
-        carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
+        #carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
         print("Robot activado...")
 
         moviendose = False

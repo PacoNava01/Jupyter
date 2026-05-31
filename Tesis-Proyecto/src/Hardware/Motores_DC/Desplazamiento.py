@@ -47,7 +47,7 @@ class Carro:
             return v
 
         factor = self._compensacion(magnitud)
-        return signo * magnitud * factor - 0.2
+        return signo * (magnitud * factor - 0.2)
         
 
     # ------------------------

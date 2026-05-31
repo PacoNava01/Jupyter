@@ -1,6 +1,10 @@
 import numpy as np
 from scipy.spatial import distance
 
+'''
+Pendiente por dictaminar su eliminación
+'''
+
 class CentroidTracker:
     def __init__(self, max_disappeared=10, max_distance=100):
         """

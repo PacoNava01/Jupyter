@@ -2,6 +2,12 @@ import camara
 import cv2
 import cv2.aruco as aruco
 
+'''
+Este script parte en la creaciòn del diccionario de 
+ArUco en el notebook de mi repositorio
+"https://github.com/PacoNava01/Portafolio/tree/main/Ejercicios/ArUco"
+
+'''
 # Configuración del diccionario y parámetros de detección
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 parameters = aruco.DetectorParameters()

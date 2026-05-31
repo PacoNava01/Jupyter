@@ -1,12 +1,13 @@
 from Vision.detector import ObjectDetector, obtener_mask
 from Vision.camara import init_cam
 from Hardware.Servomotores.MG996R import init_servos, Servo2Pos
+from Hardware.Motores_DC.Desplazamiento import Carro
 import time
 import cv2
 import numpy as np
 
 
-# --- Clase PID robusta --- 
+# --- Clase PID robusta--- 
 class PID:
     def __init__(self,kP,kI,kD):
         self.kP,self.kI,self.kD = kP,kI,kD
@@ -35,11 +36,18 @@ class PID:
         self.last_time = now
         return P + I + D
 
+# ---- Parametros del caarror ----
+pines_izq = (17,27,12)
+pines_der = (23,22,13)
+pin_stby = 24
+carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
+
 # --- Configuracion de archivos ---
 detector = ObjectDetector("/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/model.pkl",
                           "/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/scaler.pkl")
 
 cam = init_cam()
+
 
 # Servo (solo eje X)
 servo_x, _ = init_servos()
@@ -55,6 +63,9 @@ dead_zone = 5 #Banda muerta reducida gracias al PID
 #Timeout de inercia ayuda a que si el recall falla,el servo no se detenga
 last_detection_time = time.time()
 detection_timeout = 0.2 #segundos
+
+#Delimitacion de angulos para la camara
+angle_x_limit = [45,135]
 
 # --- Sincronización PID ----
 #kP: Reaccion inicial, kD: Amortigua el temblor, kI: Presicion final
@@ -115,10 +126,20 @@ while True:
             angle_x += adjustment
 
             #Limitar el rango fisico de movimiento
-            angle_x = max(10,min(170,angle_x))
-            Servo2Pos(servo_x,angle_x)
-            print(angle_x)
-  
+            angle_x = max(10,min(170,angle_x))  
+        Servo2Pos(servo_x,angle_x)
+        print(angle_x)
+
+        # CONTROL DEL CHASIS SIEMPRE
+        if angle_x < angle_x_limit[0]:
+            carrito.girar_izquierda()
+
+        elif angle_x > angle_x_limit[1]:
+            carrito.girar_derecha()
+
+        else:
+            carrito.detener()
+
     #Visualizacion
     display_frame = frame.copy()
     if best_centroid:

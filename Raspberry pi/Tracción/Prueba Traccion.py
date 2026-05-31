@@ -1,4 +1,4 @@
-from Desplazamiento import Carro
+from Hardware.Motores_DC.Desplazamiento import carro
 import numpy as np
 import cv2
 import time

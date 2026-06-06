@@ -40,7 +40,7 @@ class PID:
 pines_izq = (17,27,12)
 pines_der = (23,22,13)
 pin_stby = 24
-carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
+#carrito = Carro(pines_izq, pines_der, stby_pin=pin_stby)
 
 # --- Configuracion de archivos ---
 detector = ObjectDetector("/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/model.pkl",
@@ -50,14 +50,20 @@ cam = init_cam()
 
 
 # Servo (solo eje X)
-servo_x, _ = init_servos()
+servo_x, servo_y = init_servos()
 
 #constante de resoluciones y centro
 FRAME_W = 640
+FRAME_H = 480
+
 CENTER_X = FRAME_W // 2
+CENTER_Y = FRAME_H//2
 
 #Variables de estado del servo
-angle_x = 90.0 #Float para mayor presicion en el ajuste
+start_angle = 90.0 #Float para mayor presicion en el ajuste
+angle_x = 90
+angle_y = 90
+
 dead_zone = 5 #Banda muerta reducida gracias al PID
 
 #Timeout de inercia ayuda a que si el recall falla,el servo no se detenga
@@ -71,15 +77,19 @@ angle_x_limit = [45,135]
 #kP: Reaccion inicial, kD: Amortigua el temblor, kI: Presicion final
 #Valores departida [0.06,,0.02,0.0005] ajustar a gusto
 pid_x = PID(kP=0.01,kI=0.02,kD=0.0005)
-
+pid_y = PID(kP=0.01, kI=0.02, kD=0.0005)
 
 # --- Rangos HSV rojo ----
-low_red1,up_red1 = np.array([0, 120, 90]),np.array([10, 255, 255])
-low_red2, up_red2 = np.array([170, 120, 90]),np.array([180, 255, 255])
+low_red1 = np.array([0, 110, 20])
+up_red1  = np.array([10, 255, 255])
+
+low_red2 = np.array([170, 105, 25])
+up_red2  = np.array([185, 255, 255])
 
 
 print("Iniciando prueba en tiempo real...")
-Servo2Pos(servo_x, int(angle_x))
+Servo2Pos(servo_x, int(start_angle))
+Servo2Pos(servo_y, int(start_angle))
 cv2.namedWindow('Comparacion', cv2.WINDOW_AUTOSIZE)
 
 while True:
@@ -93,7 +103,7 @@ while True:
     #2. Deteccion con el nuevo detector (incluye escalado y solidez internamente)
     mask1 = obtener_mask(hsv_frame, low_red1, up_red1)
     mask2 = obtener_mask(hsv_frame, low_red2, up_red2)
-    final_mask = detector.process_frame(frame, cv2.add(mask1,mask2))
+    final_mask = detector.process_frame(hsv_frame, cv2.add(mask1,mask2))
    
    # 3. Localización del centroide más grande
     contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -101,7 +111,7 @@ while True:
 
     if contours:
         c = max(contours,key = cv2.contourArea)
-        if cv2.contourArea(c) > 600:
+        if cv2.contourArea(c) > 800:
             M = cv2.moments(c)
             if M["m00"] != 0:
                 cx = int(M["m10"]/M["m00"])
@@ -116,21 +126,30 @@ while True:
         #Si best_centroid es None (falla el recall), usamos el ultimo error conocido
         if best_centroid:
             error_x = CENTER_X - best_centroid[0] #Error relativo al centro 
+            error_y = CENTER_Y - best_centroid[1]
         else:
             error_x = pid_x.last_error #Mantener direccion
+            error_y = pid_y.last_error
 
+        # --- CONTROL EJE X ---
         if abs(error_x) > dead_zone:
-            #El PID calcula cuanto movernos, no a donde ir directamente
-            adjustment = pid_x.update(error_x)
-            #Actualizamos la posicion actual (invertir el signo si el servo va al lado contrario)
-            angle_x += adjustment
+            adjustment_x = pid_x.update(error_x)
+            angle_x += adjustment_x
+            angle_x = max(10, min(170, angle_x))  
+            Servo2Pos(servo_x, int(angle_x)) # <-- Se envía entero para el hardware
 
-            #Limitar el rango fisico de movimiento
-            angle_x = max(10,min(170,angle_x))  
-        Servo2Pos(servo_x,angle_x)
-        print(angle_x)
-
-        # CONTROL DEL CHASIS SIEMPRE
+        # --- CONTROL EJE Y ---
+    
+        if abs(error_y) > dead_zone:
+            adjustment_y = pid_y.update(error_y)
+            # NOTA: Si el servo se mueve al revés de lo deseado, cambia el '+' por un '-'
+            angle_y += adjustment_y 
+            angle_y = max(60, min(130, angle_y))  # <-- CORREGIDO: Filtrar con angle_y
+            Servo2Pos(servo_y, int(angle_y))
+        
+        print(f"Cam: ({int(angle_x)}, {int(angle_y)})")
+        
+    ''' # CONTROL DEL CHASIS SIEMPRE
         if angle_x < angle_x_limit[0]:
             carrito.girar_izquierda()
 
@@ -139,12 +158,13 @@ while True:
 
         else:
             carrito.detener()
-
+'''
     #Visualizacion
     display_frame = frame.copy()
     if best_centroid:
         cv2.circle(display_frame,best_centroid,10,(0,255,0),1)
         cv2.putText(display_frame,"siguiendo",(10,30),1,1,(0,255,0),2)
+        cv2.putText(display_frame,f"{cv2.contourArea(c)}",(10,60),1,1,(0,255,0),2)
 
     ML_mask_bgr = cv2.cvtColor(final_mask, cv2.COLOR_GRAY2BGR)
     combined = np.hstack((display_frame, ML_mask_bgr))

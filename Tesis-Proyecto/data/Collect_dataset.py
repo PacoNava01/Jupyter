@@ -7,11 +7,11 @@ import time
 OUTPUT_FILE = "Jupyter/Tesis-Proyecto/data/dataset.csv"
 
 # HSV rango rojo
-low_red1 = np.array([0, 120, 80])
+low_red1 = np.array([0, 110, 20])
 up_red1  = np.array([10, 255, 255])
 
-low_red2 = np.array([170, 120, 80])
-up_red2  = np.array([180, 255, 255])
+low_red2 = np.array([170, 105, 25])
+up_red2  = np.array([185, 255, 255])
 
 current_label = 1  # 1=objeto, 0=fondo
 dataset = []
@@ -155,17 +155,9 @@ if __name__ == "__main__":
             )
 
             # Máscara roja
-            m1 = cv2.inRange(
-                hsv,
-                low_red1,
-                up_red1
-            )
+            m1 = cv2.inRange(hsv,low_red1,up_red1)
 
-            m2 = cv2.inRange(
-                hsv,
-                low_red2,
-                up_red2
-            )
+            m2 = cv2.inRange(hsv,low_red2,up_red2)
 
             mask = cv2.add(m1, m2)
 

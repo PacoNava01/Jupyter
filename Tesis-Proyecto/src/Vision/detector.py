@@ -24,6 +24,14 @@ class ObjectDetector:
         circularity = (4 * np.pi * area) / (perimeter ** 2) if perimeter > 0 else 0
 
         # 2. Color (ROI segura)
+        mask_roi = np.zeros_like(h_channel)
+        #cv2.drawnContours(mask_roi,[contour],-1,255,-1)
+
+        h_mean = cv2.mean(h_channel,mask_roi)[0]
+        s_mean = cv2.mean(s_channel,mask_roi)[1]
+        v_mean = cv2.mean(v_channel,mask_roi)[2]
+        
+        '''
         roi_h = h_channel[y:y+h, x:x+w]
         roi_s = s_channel[y:y+h, x:x+w]
         roi_v = v_channel[y:y+h, x:x+w]
@@ -31,10 +39,12 @@ class ObjectDetector:
         h_mean = np.mean(roi_h)
         s_mean = np.mean(roi_s)
         v_mean = np.mean(roi_v)
+        '''
 
         return np.array([area, aspect_ratio, circularity, solidity, h_mean, s_mean, v_mean], dtype=np.float32)
 
     def process_frame(self, frame_hsv, hsv_mask):
+        #Asegurar que se dividan los cnales HSV
         h_ch, s_ch, v_ch = cv2.split(frame_hsv)
         
         contornos, _ = cv2.findContours(hsv_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -44,7 +54,7 @@ class ObjectDetector:
         candidates_contours = []
 
         for c in contornos:
-            if cv2.contourArea(c) < 550:
+            if cv2.contourArea(c) < 400:
                 continue
             
             feat = self.extract_features(c, h_ch, s_ch, v_ch)
@@ -52,7 +62,7 @@ class ObjectDetector:
                 candidates_features.append(feat)
                 candidates_contours.append(c)
         
-        # --- CORRECCIÓN 1: Indentación y Escalado ---
+        # ---  Indentación y Escalado ---
         if len(candidates_features) > 0:
             # Primero escalamos todo el batch, luego predecimos
             features_scaled = self.scaler.transform(candidates_features)

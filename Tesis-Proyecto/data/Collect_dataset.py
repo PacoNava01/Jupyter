@@ -6,13 +6,13 @@ import time
 
 OUTPUT_FILE = "Jupyter/Tesis-Proyecto/data/dataset.csv"
 
-# HSV rango rojo
-low_red1 = np.array([0, 110, 20])
-up_red1  = np.array([10, 255, 255])
+# Sector 1: Rojo que va desde el rojo-anaranjado hacia el rojo puro (Inicio del espectro)
+low_red1 = np.array([0, 115, 20])      # H mínimo = 0
+up_red1  = np.array([10, 255, 255])    # H máximo = 10
 
-low_red2 = np.array([170, 105, 25])
-up_red2  = np.array([185, 255, 255])
-
+# Sector 2: Rojo que va desde el magenta/fucsia hacia el rojo puro (Final del espectro)
+low_red2 = np.array([170, 100, 35])    # H mínimo = 170
+up_red2  = np.array([180, 255, 255])    # H máximo = 180
 current_label = 1  # 1=objeto, 0=fondo
 dataset = []
 

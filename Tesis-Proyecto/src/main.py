@@ -80,12 +80,22 @@ pid_x = PID(kP=0.01,kI=0.02,kD=0.0005)
 pid_y = PID(kP=0.01, kI=0.02, kD=0.0005)
 
 # --- Rangos HSV rojo ----
-low_red1 = np.array([0, 110, 20])
+
+# para el sector 1 del rojo [0-10]
+# Sector 1: Rojo que va desde el rojo-anaranjado hacia el rojo puro (Inicio del espectro)
+low_red1 = np.array([0, 115, 20])      # H mínimo = 0
+up_red1  = np.array([10, 255, 255])    # H máximo = 10
+
+# Sector 2: Rojo que va desde el magenta/fucsia hacia el rojo puro (Final del espectro)
+low_red2 = np.array([170, 100, 35])    # H mínimo = 170
+up_red2  = np.array([180, 255, 255])    # H máximo = 180
+
+'''low_red1 = np.array([0, 110, 20])
 up_red1  = np.array([10, 255, 255])
 
 low_red2 = np.array([170, 105, 25])
 up_red2  = np.array([185, 255, 255])
-
+'''
 
 print("Iniciando prueba en tiempo real...")
 Servo2Pos(servo_x, int(start_angle))
@@ -148,7 +158,7 @@ while True:
             Servo2Pos(servo_y, int(angle_y))
         
         print(f"Cam: ({int(angle_x)}, {int(angle_y)})")
-        
+
     ''' # CONTROL DEL CHASIS SIEMPRE
         if angle_x < angle_x_limit[0]:
             carrito.girar_izquierda()

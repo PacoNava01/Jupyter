@@ -1,81 +1,82 @@
+import numpy as np
 import cv2
-from picamera2 import Picamera2
-import time
-import os
+import glob
 
-'''
-Capturamos una foto cada x segundos mientras se "graba un video"
-'''
+# Parametros del tablero (Esquinas internas: donde se cruzan los cuadros negros y blancos)
+columnas_internas = 10
+filas_internas = 8
+cuadro_size_mm = 15
 
-# Parametros
-intervalo = 3
-nombre_ventana = "Frame"
-contador = 1
+# Criterios de terminacion para la optimizacion (CORREGIDO)
+criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-# Directorio destino
-DICT_DESTINO = "/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/ArUcocalib"
+# Preparar los puntos de objeto (0,0,0), (15,0,0), (30,0,0),...
+objp = np.zeros((filas_internas * columnas_internas, 3), np.float32)
+# Generamos la malla adaptada correctamente a las dimensiones
+objp[:, :2] = np.mgrid[0:columnas_internas, 0:filas_internas].T.reshape(-1, 2)
+objp *= cuadro_size_mm
 
-# Asegurar que el directorio exista para evitar errores
-os.makedirs(DICT_DESTINO, exist_ok=True)
+objpoints = []  # Puntos 3D en el mundo real
+imgpoints = []  # Puntos 2D en el plano de la imagen
 
-ultimo_chek = time.time()
+# Cargar las imagenes de calibracion con la ruta correcta
+ruta_carpeta = '/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/ArUcocalib/'
+imagenes = glob.glob(ruta_carpeta + 'frame_calib_*.jpg')
 
-def init_cam():
-    try:
-        cam = Picamera2()
-        config = cam.create_video_configuration(
-            main={"size": (640, 480), "format": "RGB888"}
-        )
-        cam.configure(config)
-        cam.start()
-        print("Cámara inicializada correctamente.")
-        return cam
-    except Exception as e:
-        print(f"Error al inicializar la cámara: {e}")
-        return None
+if len(imagenes) == 0:
+    print("Error: No se encontraron imágenes con el patrón 'frame_calib_*.jpg'")
+    exit()
 
+shape_imagen = None
 
-if __name__ == '__main__':
-    try:
-        camara = init_cam()
-        if camara is None: 
-            exit()
-
-        cv2.namedWindow(nombre_ventana)
+for frame in imagenes:
+    img = cv2.imread(frame)
+    if img is None:
+        continue
         
-        while True:
-            frame = camara.capture_array() 
-            frame = cv2.rotate(frame, cv2.ROTATE_180) # frame para mostrar
-            
-            # Clonamos el frame original ANTES de pintarle texto para guardarlo limpio
-            frame2save = frame.copy() 
-            
-            ahora = time.time()
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    shape_imagen = gray.shape[::-1]  # Guardamos el tamaño (ancho, alto)
 
-            if ahora - ultimo_chek >= intervalo:
-                # Nombre del archivo con la ruta completa
-                nombre_archivo = f"frame_calib_{contador}.jpg"
-                ruta_completa = os.path.join(DICT_DESTINO, nombre_archivo)
-                
-                # Guardamos la imagen
-                cv2.imwrite(ruta_completa, frame2save)
-                print(f"Foto guardada: {ruta_completa}")
+    # Buscar las esquinas del tablero
+    ret, corners = cv2.findChessboardCorners(gray, (columnas_internas, filas_internas), None)
 
-                ultimo_chek = ahora
-                contador += 1
+    if ret == True:
+        objpoints.append(objp)
+        # Refinar las coordenadas de las esquinas para mayor precision
+        corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+        imgpoints.append(corners2)
 
-            # Mostramos en pantalla el número de la PRÓXIMA foto que se va a tomar
-            cv2.putText(frame, f"Prox. Foto: #{contador}", (10, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # Opcional: Dibujar y mostrar las esquinas
+        cv2.drawChessboardCorners(img, (columnas_internas, filas_internas), corners2, ret)
+        cv2.imshow('Calibrando...', img)
+        cv2.waitKey(500)
 
-            cv2.imshow(nombre_ventana, frame)
-            
-            # Detecta la tecla Enter (13) para salir
-            key = cv2.waitKey(1) & 0xFF
-            if key == 13: 
-                break
+# Al terminar el bucle, cerramos las ventanas de muestra
+cv2.destroyAllWindows()
 
-    finally:
-        if 'camara' in locals() and camara is not None:
-            camara.stop()
-        cv2.destroyAllWindows()
+# --- LA CALIBRACIÓN VA AQUÍ (FUERA DEL BUCLE) ---
+if len(objpoints) > 0:
+    print(f"Procesando calibración con {len(objpoints)} imágenes válidas...")
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, shape_imagen, None, None)
+    print("\n--- RESULTADOS DE LA CALIBRACIÓN ---")
+    print("Matriz Intrínseca (mtx):\n", mtx)
+    print("\nCoeficientes de Distorsión (dist):\n", dist)
+    print(f"\nError de reproyección total: {ret}")
+else:
+    print("Error: No se pudieron detectar las esquinas en ninguna de las imágenes.")
+
+#Guardamos la matriz 
+'''
+Procesando calibración con 33 imágenes válidas...
+
+--- RESULTADOS DE LA CALIBRACIÓN ---
+Matriz Intrínseca (mtx):
+ [[918.7465565    0.         270.87358098]
+ [  0.         920.61622722 223.78382511]
+ [  0.           0.           1.        ]]
+
+Coeficientes de Distorsión (dist):
+ [[-0.50478208  0.86612519  0.00573664  0.00325532 -2.1152841 ]]
+
+Error de reproyección total: 1.909683550439653
+'''

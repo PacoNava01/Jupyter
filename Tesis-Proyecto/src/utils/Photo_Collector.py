@@ -76,7 +76,7 @@ filas_internas = 8
 cuadro_size_mm = 15
 # Cargar las imagenes de calibracion con la ruta correcta
 ruta_carpeta = r'/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/ArUcocalib/'
-ruta_save = r'Tesis-Proyecto\data'
+ruta_save = r'/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/ArUcocalib'
 
 def calibracion(ruta_carpeta,ruta_save,columnas_internas = 10,filas_internas = 8,cuadro_size_mm = 15):
     # Criterios de terminacion para la optimizacion (CORREGIDO)

@@ -1,14 +1,6 @@
 from gpiozero import Robot, Motor, OutputDevice
-import math
 
 class Carro:
-    COEFS = {
-        'a': 0.9356779218031275,
-        'b': -1.864449111530371,
-        'c': 1.1723900277729624,
-        'd': -0.2070794160209165
-    }
-
     def __init__(self, left_pins, right_pins, stby_pin, invertir_stby=False):
         self.stby = OutputDevice(stby_pin, active_high=not invertir_stby)
         self.activar_driver()
@@ -21,22 +13,14 @@ class Carro:
     def _clamp(self, v, minimo=-1.0, maximo=1.0):
         return max(minimo, min(maximo, v))
 
-    def _compensacion(self, pwm):
-        a, b, c, d = (self.COEFS[k] for k in ('a','b','c','d'))
-        x = max(0.4, min(1.0, pwm))
-        error = a*x**3 + b*x**2 + c*x + d
-        return 1 - error
-
-    def _compensar_derecho(self, v):
-        magnitud = abs(v)
-        if magnitud < 0.4:
-            return v
-        factor = self._compensacion(magnitud)
-        return math.copysign(magnitud * factor - 0.2, v)
-
     def mover(self, vel_izq, vel_der):
+        """
+        Control diferencial del robot.
+        Entradas en rango [-1, 1]
+        """
         v_i = self._clamp(vel_izq)
-        v_d = self._clamp(self._compensar_derecho(vel_der))
+        v_d = self._clamp(vel_der)
+
         self.robot.left_motor.value = v_i
         self.robot.right_motor.value = v_d
 

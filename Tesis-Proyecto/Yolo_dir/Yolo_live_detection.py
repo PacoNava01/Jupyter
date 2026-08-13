@@ -64,6 +64,8 @@ with VDevice(params) as target:
                 while True:
                     # Captura de frame en RGB
                     frame = cam.capture_array()
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+
                     if frame is None:
                         break
 
@@ -77,14 +79,16 @@ with VDevice(params) as target:
                     raw_results = infer_pipeline.infer(input_data)
 
                     # Preparar frame para visualización (RGB a BGR)
-                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    display_frame = frame
 
-                    # Postprocesamiento directo
-                    detections_batch = raw_results[output_key][0]
-                    detections_array = np.array(detections_batch)
+                    # Postprocesamiento seguro (evita errores con formas heterogéneas)
+                    detections_batch = raw_results[output_key]
+                    current_detections = detections_batch[0] if isinstance(detections_batch, list) else detections_batch
 
-                    for class_id in range(detections_array.shape[0]):
-                        boxes_for_class = detections_array[class_id]
+                    for class_id, boxes_for_class in enumerate(current_detections):
+                        if len(boxes_for_class) == 0:
+                            continue
+                            
                         for det in boxes_for_class:
                             if len(det) >= 5:
                                 ymin, xmin, ymax, xmax, score = det[:5]

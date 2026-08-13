@@ -702,3 +702,10 @@
 [2026-08-12 19:33:57.006] [46741] [HailoRT] [info] [queue_elements.cpp:46] [~BaseQueueElement] Queue element PushQEl3yolov8n/input_layer1 has 0 frames in his Queue on destruction
 [2026-08-12 19:33:57.006] [46741] [HailoRT] [info] [core_op.cpp:186] [deactivate] Deactivating took 0.603538 ms
 [2026-08-12 19:33:57.006] [46741] [HailoRT] [info] [core_op.cpp:186] [deactivate] Deactivating took 0.637428 ms
+[2026-08-12 21:21:57.656] [74336] [HailoRT] [error] [hef.cpp:612] [parse_hef_file] Unsupported hef version 1067590
+[2026-08-12 21:21:57.656] [74336] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2026-08-12 21:21:57.656] [74336] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2026-08-12 21:21:57.656] [74336] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_HEF_NOT_SUPPORTED(92)
+[2026-08-12 21:22:41.010] [74401] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: yolov8n
+[2026-08-12 21:32:23.965] [74572] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: yolov8n
+[2026-08-12 21:32:23.965] [74572] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: yolov8n

@@ -1,6 +1,7 @@
 from gpiozero import Robot, Motor, OutputDevice
 import os
 import cv2
+import time
 
 class Carro:
     # Nuevos coeficientes ajustados para escala 0.0 - 1.0
@@ -96,11 +97,40 @@ class Carro:
         self.detener()
         self.stby.off()
 
-if __name__ == "main":
+if __name__ == "__main__":
     # Pines: (IN1, IN2, PWM) para cada lado
     pines_izq = (17, 27, 12)
     pines_der = (23, 22, 13)    
     pin_stby = 24  # Conecta este pin al STBY del driver
 
     carrito = None
+    try:
+        print("Inicializando carrito...")
+        carrito = Carro(pines_izq, pines_der, pin_stby)
+        
+        print("-> Avanzando...")
+        #carrito.avanzar(0.5)
+        #time.sleep(2)
+        
+        print("-> Retrocediendo...")
+        #carrito.retroceder(0.5)
+        #time.sleep(2)
+        
+        print("-> Girando a la izquierda...")
+        carrito.girar_izquierda(0.4)
+        time.sleep(1.5)
+        
+        print("-> Girando a la derecha...")
+        carrito.girar_derecha(0.6)
+        time.sleep(1.5)
+        
+        print("-> Deteniendo motores...")
+        carrito.detener()
+
+    except KeyboardInterrupt:
+        print("\nPrueba interrumpida por el usuario.")
     
+    finally:
+        if carrito:
+            print("Apagando driver y liberando pines...")
+            carrito.apagar_driver()

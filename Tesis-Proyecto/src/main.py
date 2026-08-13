@@ -40,7 +40,7 @@ pin_stby = 24
 # 2. CONFIGURACIÓN DE IA (YOLOv8), ARUCO Y SISTEMA ÓPTICO
 # =====================================================================
 # Cargar modelo YOLOv8 entrenado (Ruta en tu Pi)
-MODEL_PATH = "/home/pacon/Tesis_pacon/Jupyter/Tesis-Proyecto/data/yolov8n_colores_best.onnx"
+MODEL_PATH = "/home/pacon/Jupyter/Tesis-Proyecto/data/yolov8n_colores_best.onnx"
 model = YOLO(MODEL_PATH, task='segment')
 
 # Configurar Detector ArUco
@@ -55,7 +55,7 @@ camera_matrix = np.array([[650.0, 0.0, 320.0],
 dist_coeffs = np.zeros((5, 1), dtype=np.float32)
 
 # SELECCIÓN DEL COLOR OBJETIVO: 'rojo', 'verde', o 'azul'
-CLASE_OBJETIVO = "verde" 
+CLASE_OBJETIVO = "rojo" 
 
 # Configuración de Hardware
 cam = init_cam()

@@ -1117,3 +1117,5 @@
 [2026-08-12 22:46:20.762] [76878] [HailoRT] [info] [queue_elements.cpp:46] [~BaseQueueElement] Queue element PushQEl3yolov8n/input_layer1 has 0 frames in his Queue on destruction
 [2026-08-12 22:46:20.762] [76878] [HailoRT] [info] [core_op.cpp:186] [deactivate] Deactivating took 0.414401 ms
 [2026-08-12 22:46:20.762] [76878] [HailoRT] [info] [core_op.cpp:186] [deactivate] Deactivating took 0.431678 ms
+[2026-08-12 22:53:55.172] [77758] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: yolov8n
+[2026-08-12 22:53:55.173] [77758] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: yolov8n

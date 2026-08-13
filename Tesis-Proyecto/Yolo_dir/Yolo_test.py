@@ -4,7 +4,6 @@ from picamera2 import Picamera2
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
                             ConfigureParams, InputVStreamParams, OutputVStreamParams)
 
-# Clases por defecto de COCO (80 categorías)
 COCO_CLASSES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -31,7 +30,6 @@ def init_cam():
         print(f"Error al inicializar la cámara: {e}")
         return None
 
-# 1. Configuración del modelo y dispositivo
 hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
 hef = HEF(hef_path)
 
@@ -48,24 +46,20 @@ with VDevice(params) as target:
     input_height, input_width = input_info.shape[0], input_info.shape[1]
     input_name = input_info.name
 
-    # ACTIVAR EL GRUPO DE RED
     with network_group.activate(network_group_params):
         with InferVStreams(network_group, input_vstream_params, output_vstream_params) as infer_pipeline:
             
             cam = init_cam()
             if cam is None:
-                print("No se pudo iniciar la cámara. Saliendo...")
                 exit(1)
 
             print("Iniciando bucle de inferencia en la NPU...")
-            CONF_THRESHOLD = 0.5  # Umbral de confianza (50%)
+            CONF_THRESHOLD = 0.3  # Bajamos a 0.3 para asegurar capturar detecciones iniciales
 
             try:
                 while True:
-                    frame = cam.capture_array()
-                    
+                    frame = cam.capture_array() # Frame en RGB
                     if frame is None:
-                        print("Error: Frame vacío de la cámara.")
                         break
 
                     h_orig, w_orig, _ = frame.shape
@@ -74,55 +68,51 @@ with VDevice(params) as target:
                     resized_frame = cv2.resize(frame, (input_width, input_height))
                     input_data = {input_name: np.expand_dims(resized_frame, axis=0).astype(np.uint8)}
 
-                    # Inferencia en la NPU
+                    # Inferencia
                     raw_results = infer_pipeline.infer(input_data)
 
-                    # --- CORRECCIÓN DE COLOR ---
-                    # Picamera2 entrega RGB888. OpenCV espera BGR para mostrar los colores reales.
-                    display_frame = cv2.rotate(frame, cv2.ROTATE_180)
+                    # Frame para visualización en OpenCV (convertimos a BGR)
+                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                    # Obtener resultados de la NPU de forma segura
-                    output_key = 'yolov8n/yolov8_nms_postprocess'
-                    if output_key in raw_results:
-                        detections = raw_results[output_key]
-                        
-                        # Recorremos las detecciones devueltas por el NMS de Hailo
-                        # El formato estándar de este post-procesamiento agrupa por clases o entrega un array estructurado
-                        for detection_class in detections:
-                            for det in detection_class:
-                                # Dependiendo de la versión del compilador, el orden puede variar, 
-                                # pero típicamente con NMS de Hailo viene como: [ymin, xmin, ymax, xmax, score, class_id] 
-                                # o flotantes normalizados. Validamos longitud:
-                                if len(det) >= 6:
-                                    ymin, xmin, ymax, xmax, score, class_id = det[:6]
-                                    
-                                    if score >= CONF_THRESHOLD:
-                                        # Escalar coordenadas a la resolución real de la cámara (640x480)
-                                        x1 = int(xmin * w_orig)
-                                        y1 = int(ymin * h_orig)
-                                        x2 = int(xmax * w_orig)
-                                        y2 = int(ymax * h_orig)
-                                        
-                                        label_idx = int(class_id)
-                                        label = COCO_CLASSES[label_idx] if label_idx < len(COCO_CLASSES) else f"ID:{label_idx}"
-                                        caption = f"{label} {score:.2f}"
+                    # Procesamiento de la salida NMS
+                    for key, detections in raw_results.items():
+                        # detections suele ser una lista de listas por lote (batch)
+                        for batch in detections:
+                            for det in batch:
+                                # Manejo seguro según el objeto devuelto por HailoRT
+                                try:
+                                    # Si Hailo devuelve el objeto nativo HailoDetection
+                                    if hasattr(det, 'get_bbox'):
+                                        bbox = det.get_bbox()
+                                        ymin, xmin, ymax, xmax = bbox.ymin(), bbox.xmin(), bbox.ymax(), bbox.xmax()
+                                        score = det.get_confidence()
+                                        class_id = det.get_class_id()
+                                    # Si devuelve una estructura/tupla de NumPy
+                                    else:
+                                        ymin, xmin, ymax, xmax, score, class_id = det[:6]
+                                except Exception:
+                                    continue
 
-                                        # Dibujar Bounding Box (Verde)
-                                        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                        
-                                        # Dibujar etiqueta de texto
-                                        (w_txt, h_txt), _ = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                                        cv2.rectangle(display_frame, (x1, max(y1 - 20, 0)), (x1 + w_txt, max(y1, 20)), (0, 255, 0), -1)
-                                        cv2.putText(display_frame, caption, (x1, max(y1 - 5, 15)), 
-                                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+                                if score >= CONF_THRESHOLD:
+                                    x1 = int(xmin * w_orig)
+                                    y1 = int(ymin * h_orig)
+                                    x2 = int(xmax * w_orig)
+                                    y2 = int(ymax * h_orig)
 
-                    # Mostrar fotograma corregido en colores reales con detecciones
+                                    label_idx = int(class_id)
+                                    label = COCO_CLASSES[label_idx] if label_idx < len(COCO_CLASSES) else f"ID:{label_idx}"
+                                    caption = f"{label} {score:.2f}"
+
+                                    # Dibujar caja
+                                    cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                    cv2.putText(display_frame, caption, (x1, max(y1 - 5, 15)), 
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
                     cv2.imshow("Hailo AI Kit - Deteccion YOLOv8", display_frame)
                     
-                    # Presionar 'Enter' (código 13) para salir
-                    if cv2.waitKey(1) & 0xFF == 13:
+                    if cv2.waitKey(1) & 0xFF == 13: # Enter
                         break
             finally:
                 cam.stop()
                 cv2.destroyAllWindows()
-                print("Cámara liberada y ventanas cerradas.")
+                print("Cámara liberada.")

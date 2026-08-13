@@ -1,11 +1,5 @@
 from gpiozero import Robot, Motor, OutputDevice
-<<<<<<< HEAD
-import os
-import cv2
-import time
-=======
 import math
->>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad
 
 class Carro:
     COEFS = {
@@ -67,46 +61,8 @@ class Carro:
         self.stby.off()
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    # Pines: (IN1, IN2, PWM) para cada lado
-=======
->>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad
     pines_izq = (17, 27, 12)
     pines_der = (23, 22, 13)    
     pin_stby = 24
 
-<<<<<<< HEAD
-    carrito = None
-    try:
-        print("Inicializando carrito...")
-        carrito = Carro(pines_izq, pines_der, pin_stby)
-        
-        print("-> Avanzando...")
-        #carrito.avanzar(0.5)
-        #time.sleep(2)
-        
-        print("-> Retrocediendo...")
-        #carrito.retroceder(0.5)
-        #time.sleep(2)
-        
-        print("-> Girando a la izquierda...")
-        carrito.girar_izquierda(0.4)
-        time.sleep(1.5)
-        
-        print("-> Girando a la derecha...")
-        carrito.girar_derecha(0.6)
-        time.sleep(1.5)
-        
-        print("-> Deteniendo motores...")
-        carrito.detener()
-
-    except KeyboardInterrupt:
-        print("\nPrueba interrumpida por el usuario.")
-    
-    finally:
-        if carrito:
-            print("Apagando driver y liberando pines...")
-            carrito.apagar_driver()
-=======
     carrito = Carro(pines_izq, pines_der, pin_stby)
->>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad

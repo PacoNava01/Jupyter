@@ -17,8 +17,8 @@ COCO_CLASSES = [
 ]
 
 hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
-image_path = "Tesis-Proyecto/Yolo_dir/test.jpg"
-output_path = "Tesis-Proyecto/Yolo_dir/test_detected.jpg"
+image_path = "Tesis-Proyecto/Yolo_dir/test_game.jpg"
+output_path = "Tesis-Proyecto/Yolo_dir/test_game_detected.jpg"
 
 # 1. Cargar imagen original
 img_original = cv2.imread(image_path)
@@ -59,12 +59,8 @@ output_key = 'yolov8n/yolov8_nms_postprocess'
 detections_batch = raw_results[output_key][0]
 total_detecciones = 0
 
-# Convertimos a array de numpy para iterar de forma segura sobre (80, ...)
-detections_array = np.array(detections_batch)
-
-# Recorremos cada clase (de 0 a 79)
-for class_id in range(detections_array.shape[0]):
-    boxes_for_class = detections_array[class_id]
+# Iteramos directamente sobre la lista de clases sin forzar un numpy array homogéneo
+for class_id, boxes_for_class in enumerate(detections_batch):
     
     for det in boxes_for_class:
         # Extraer [ymin, xmin, ymax, xmax, score]

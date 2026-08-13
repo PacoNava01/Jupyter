@@ -17,3 +17,16 @@ print("\n--- SALIDA(S) DEL MODELO ---")
 for info in output_infos:
     print(f"Nombre de capa de salida: {info.name}")
     print(f"Dimensiones devueltas: {info.shape}")
+
+'''
+(.pacon) pacon@Pacon:~/Jupyter $ /home/pacon/Jupyter/Librerias/.pacon/bin/python /home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/Yolo_test.py
+--- ENTRADA DEL MODELO ---
+Nombre de la capa de entrada: yolov8n/input_layer1
+Dimensiones esperadas (Alto, Ancho, Canales): (640, 640, 3)
+Tipo de dato esperado: FormatType.UINT8
+
+--- SALIDA(S) DEL MODELO ---
+Nombre de capa de salida: yolov8n/yolov8_nms_postprocess
+Dimensiones devueltas: (80, 5, 100)
+
+'''

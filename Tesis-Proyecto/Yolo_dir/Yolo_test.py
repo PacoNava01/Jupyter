@@ -3,31 +3,40 @@ import numpy as np
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
                             ConfigureParams, InputVStreamParams, OutputVStreamParams)
 
-# Rutas
-hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
-image_path = "Tesis-Proyecto/Yolo_dir/Test.jpg"
+# Clases del dataset COCO (80 clases estándar)
+COCO_CLASSES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+    "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+    "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    "hair drier", "toothbrush"
+]
 
-# 1. Cargar la imagen del disco
+hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
+image_path = "Tesis-Proyecto/Yolo_dir/test.jpg"
+output_path = "Tesis-Proyecto/Yolo_dir/test_detected.jpg"
+
+# 1. Cargar imagen original
 img_original = cv2.imread(image_path)
 if img_original is None:
-    raise FileNotFoundError(f"No se pudo encontrar la imagen en: {image_path}")
+    raise FileNotFoundError(f"No se encontró la imagen en {image_path}")
 
-# OpenCV lee en BGR por defecto. Convertimos a RGB porque la mayoría de redes NPU se entrenan en RGB
+h_orig, w_orig, _ = img_original.shape
 img_rgb = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
 
-# 2. Configurar Hailo NPU
+# 2. Cargar modelo e inferir en la NPU
 hef = HEF(hef_path)
 input_info = hef.get_input_vstream_infos()[0]
 input_h, input_w = input_info.shape[0], input_info.shape[1]
 input_name = input_info.name
 
-# 3. Pre-procesamiento
-# Redimensionamos la imagen a la resolución que exige la NPU (ej. 640x640)
 resized_img = cv2.resize(img_rgb, (input_w, input_h))
-# Añadimos la dimensión de lote (Batch): de (640,640,3) a (1,640,640,3)
 input_data = {input_name: np.expand_dims(resized_img, axis=0).astype(np.uint8)}
 
-# 4. Inferencia en el Hardware (PCIe)
 params = VDevice.create_params()
 with VDevice(params) as target:
     configure_params = ConfigureParams.create_from_hef(hef, interface=HailoStreamInterface.PCIe)
@@ -39,28 +48,48 @@ with VDevice(params) as target:
 
     with network_group.activate(network_group_params):
         with InferVStreams(network_group, input_vstream_params, output_vstream_params) as infer_pipeline:
-            print("Enviando 'test.jpg' a la NPU Hailo-8L...")
             raw_results = infer_pipeline.infer(input_data)
-            print("¡Inferencia completada con éxito!")
 
-# 5. Analizar el resultado puro
-for key, value in raw_results.items():
-    print(f"\nClave de salida: '{key}'")
-    print(f"Tipo de objeto devuelto: {type(value)}")
-    if isinstance(value, np.ndarray):
-        print(f"Shape del arreglo NumPy: {value.shape}")
-        print(f"Ejemplo de primer elemento: {value[0][:2]}")
-    elif isinstance(value, list):
-        print(f"Longitud de la lista devuelta: {len(value)}")
-        print(f"Tipo del primer elemento dentro de la lista: {type(value[0])}")
+# 3. Post-procesamiento e inspección de cajas
+CONF_THRESHOLD = 0.3  # Umbral de confianza
+output_img = img_original.copy()
+output_key = 'yolov8n/yolov8_nms_postprocess'
 
-'''
-(.pacon) pacon@Pacon:~/Jupyter $ /home/pacon/Jupyter/Librerias/.pacon/bin/python /home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/Yolo_test.py
-Enviando 'test.jpg' a la NPU Hailo-8L...
-¡Inferencia completada con éxito!
+# Extraemos el primer elemento del batch
+detections_batch = raw_results[output_key][0]
+total_detecciones = 0
 
-Clave de salida: 'yolov8n/yolov8_nms_postprocess'
-Tipo de objeto devuelto: <class 'list'>
-Longitud de la lista devuelta: 1
-Tipo del primer elemento dentro de la lista: <class 'list'>
-'''
+# Convertimos a array de numpy para iterar de forma segura sobre (80, ...)
+detections_array = np.array(detections_batch)
+
+# Recorremos cada clase (de 0 a 79)
+for class_id in range(detections_array.shape[0]):
+    boxes_for_class = detections_array[class_id]
+    
+    for det in boxes_for_class:
+        # Extraer [ymin, xmin, ymax, xmax, score]
+        if len(det) >= 5:
+            ymin, xmin, ymax, xmax, score = det[:5]
+            
+            if score >= CONF_THRESHOLD:
+                total_detecciones += 1
+                
+                # Desnormalizar coordenadas (de 0.0 - 1.0 a píxeles de test.jpg)
+                x1 = int(xmin * w_orig)
+                y1 = int(ymin * h_orig)
+                x2 = int(xmax * w_orig)
+                y2 = int(ymax * h_orig)
+
+                label_name = COCO_CLASSES[class_id] if class_id < len(COCO_CLASSES) else f"ID:{class_id}"
+                caption = f"{label_name} {score:.2f}"
+
+                # Dibujar rectángulo verde y texto
+                cv2.rectangle(output_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(output_img, caption, (x1, max(y1 - 5, 15)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+print(f"Total de objetos detectados con éxito: {total_detecciones}")
+
+# 4. Guardar la imagen con las marcas
+cv2.imwrite(output_path, output_img)
+print(f"Imagen procesada guardada en: {output_path}")

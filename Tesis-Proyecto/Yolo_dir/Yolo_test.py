@@ -5,7 +5,7 @@ from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
 
 # Rutas
 hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
-image_path = "Tesis-Proyecto/Yolo_dir/test.jpg"
+image_path = "Tesis-Proyecto/Yolo_dir/Test.jpg"
 
 # 1. Cargar la imagen del disco
 img_original = cv2.imread(image_path)
@@ -53,3 +53,14 @@ for key, value in raw_results.items():
     elif isinstance(value, list):
         print(f"Longitud de la lista devuelta: {len(value)}")
         print(f"Tipo del primer elemento dentro de la lista: {type(value[0])}")
+
+'''
+(.pacon) pacon@Pacon:~/Jupyter $ /home/pacon/Jupyter/Librerias/.pacon/bin/python /home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/Yolo_test.py
+Enviando 'test.jpg' a la NPU Hailo-8L...
+¡Inferencia completada con éxito!
+
+Clave de salida: 'yolov8n/yolov8_nms_postprocess'
+Tipo de objeto devuelto: <class 'list'>
+Longitud de la lista devuelta: 1
+Tipo del primer elemento dentro de la lista: <class 'list'>
+'''

@@ -17,7 +17,7 @@ COCO_CLASSES = [
 ]
 
 hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
-image_path = "Tesis-Proyecto/Yolo_dir/test.jpg"
+image_path = "Tesis-Proyecto/Yolo_dir/Test.jpg"
 
 img_original = cv2.imread(image_path)
 h_orig, w_orig, _ = img_original.shape
@@ -46,7 +46,7 @@ with VDevice(params) as target:
 
 # Copia de la imagen original en BGR para escribir los resultados
 output_img = img_original.copy()
-CONF_THRESHOLD = 0.35  # Umbral para filtrar falsos positivos
+CONF_THRESHOLD = 0.2  # Umbral para filtrar falsos positivos
 
 # Recorrer los resultados
 for key, detections in raw_results.items():

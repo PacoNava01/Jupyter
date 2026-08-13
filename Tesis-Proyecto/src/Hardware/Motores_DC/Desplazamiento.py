@@ -1,10 +1,13 @@
 from gpiozero import Robot, Motor, OutputDevice
+<<<<<<< HEAD
 import os
 import cv2
 import time
+=======
+import math
+>>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad
 
 class Carro:
-    # Nuevos coeficientes ajustados para escala 0.0 - 1.0
     COEFS = {
         'a': 0.9356779218031275,
         'b': -1.864449111530371,
@@ -21,75 +24,41 @@ class Carro:
 
         self.robot = Robot(left=motor_izq, right=motor_der)
 
-    # ------------------------
-    # Utilidades internas
-    # ------------------------
     def _clamp(self, v, minimo=-1.0, maximo=1.0):
         return max(minimo, min(maximo, v))
 
     def _compensacion(self, pwm):
-        """
-        Calcula factor de compensación para magnitudes (0 a 1)
-        """
-        a = self.COEFS['a']
-        b = self.COEFS['b']
-        c = self.COEFS['c']
-        d = self.COEFS['d']
-
+        a, b, c, d = (self.COEFS[k] for k in ('a','b','c','d'))
         x = max(0.4, min(1.0, pwm))
         error = a*x**3 + b*x**2 + c*x + d
         return 1 - error
 
     def _compensar_derecho(self, v):
-        signo = 1 if v >= 0 else -1
         magnitud = abs(v)
-
         if magnitud < 0.4:
             return v
-
         factor = self._compensacion(magnitud)
-        return signo * (magnitud * factor - 0.2)
-        
+        return math.copysign(magnitud * factor - 0.2, v)
 
-    # ------------------------
-    # Métodos principales
-    # ------------------------
     def mover(self, vel_izq, vel_der):
-        """
-        Control diferencial del robot.
-        Entradas en rango [-1, 1]
-        """
-
         v_i = self._clamp(vel_izq)
-        v_d = self._clamp(vel_der)
-
-        # Aplicar compensación solo al motor derecho
-        v_d = self._compensar_derecho(v_d)
-
-        # Clamp final
-        v_d = self._clamp(v_d)
-
+        v_d = self._clamp(self._compensar_derecho(vel_der))
         self.robot.left_motor.value = v_i
         self.robot.right_motor.value = v_d
 
-    def avanzar(self, velocidad=0.5):
-        self.mover(velocidad, velocidad)
-
-    def retroceder(self, velocidad=0.5):
-        self.mover(-velocidad, -velocidad)
-
-    def girar_izquierda(self, velocidad=0.5):
-        self.mover(-velocidad, velocidad)
-
-    def girar_derecha(self, velocidad=0.5):
-        self.mover(velocidad, -velocidad)
+    def accion(self, tipo, velocidad=0.5):
+        acciones = {
+            'avanzar': (velocidad, velocidad),
+            'retroceder': (-velocidad, -velocidad),
+            'izquierda': (-velocidad, velocidad),
+            'derecha': (velocidad, -velocidad)
+        }
+        v_i, v_d = acciones[tipo]
+        self.mover(v_i, v_d)
 
     def detener(self):
         self.robot.stop()
 
-    # ------------------------
-    # Control del driver
-    # ------------------------
     def activar_driver(self):
         self.stby.on()
 
@@ -98,11 +67,15 @@ class Carro:
         self.stby.off()
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     # Pines: (IN1, IN2, PWM) para cada lado
+=======
+>>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad
     pines_izq = (17, 27, 12)
     pines_der = (23, 22, 13)    
-    pin_stby = 24  # Conecta este pin al STBY del driver
+    pin_stby = 24
 
+<<<<<<< HEAD
     carrito = None
     try:
         print("Inicializando carrito...")
@@ -134,3 +107,6 @@ if __name__ == "__main__":
         if carrito:
             print("Apagando driver y liberando pines...")
             carrito.apagar_driver()
+=======
+    carrito = Carro(pines_izq, pines_der, pin_stby)
+>>>>>>> 1da99ca60e510b501ffb13674dc76cc9a41a06ad

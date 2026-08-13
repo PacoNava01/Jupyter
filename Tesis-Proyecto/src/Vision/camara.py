@@ -14,6 +14,7 @@ tiempo_click = 0
 TIEMPO_ESPERA = 3
 
 
+
 def init_cam():
 
     try:

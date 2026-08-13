@@ -37,20 +37,16 @@ hef = HEF(hef_path)
 
 params = VDevice.create_params()
 with VDevice(params) as target:
-    # Configurar el grupo de inferencia
     configure_params = ConfigureParams.create_from_hef(hef, interface=HailoStreamInterface.PCIe)
     network_group = target.configure(hef, configure_params)[0]
     network_group_params = network_group.create_params()
 
-    # Definir parámetros de entrada y salida
     input_vstream_params = InputVStreamParams.make(network_group)
     output_vstream_params = OutputVStreamParams.make(network_group)
 
-    # Obtener información de entrada y salida de la red
     input_info = hef.get_input_stream_infos()[0]
     input_height, input_width = input_info.shape[0], input_info.shape[1]
     input_name = input_info.name
-    output_name = hef.get_output_stream_infos()[0].name
 
     # ACTIVAR EL GRUPO DE RED
     with network_group.activate(network_group_params):
@@ -63,10 +59,11 @@ with VDevice(params) as target:
 
             print("Iniciando bucle de inferencia en la NPU...")
             CONF_THRESHOLD = 0.5  # Umbral de confianza (50%)
-            
+
             try:
                 while True:
                     frame = cam.capture_array()
+                    
                     if frame is None:
                         print("Error: Frame vacío de la cámara.")
                         break
@@ -80,42 +77,49 @@ with VDevice(params) as target:
                     # Inferencia en la NPU
                     raw_results = infer_pipeline.infer(input_data)
 
-                    # --- POST-PROCESAMIENTO ---
-                    # Convertir el frame de RGB a BGR para pintarlo adecuadamente con OpenCV
-                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    # --- CORRECCIÓN DE COLOR ---
+                    # Picamera2 entrega RGB888. OpenCV espera BGR para mostrar los colores reales.
+                    display_frame = cv2.rotate(frame, cv2.ROTATE_180)
 
-                    # Extraer detecciones de la salida de Hailo
-                    detections = raw_results[output_name][0]
+                    # Obtener resultados de la NPU de forma segura
+                    output_key = 'yolov8n/yolov8_nms_postprocess'
+                    if output_key in raw_results:
+                        detections = raw_results[output_key]
+                        
+                        # Recorremos las detecciones devueltas por el NMS de Hailo
+                        # El formato estándar de este post-procesamiento agrupa por clases o entrega un array estructurado
+                        for detection_class in detections:
+                            for det in detection_class:
+                                # Dependiendo de la versión del compilador, el orden puede variar, 
+                                # pero típicamente con NMS de Hailo viene como: [ymin, xmin, ymax, xmax, score, class_id] 
+                                # o flotantes normalizados. Validamos longitud:
+                                if len(det) >= 6:
+                                    ymin, xmin, ymax, xmax, score, class_id = det[:6]
+                                    
+                                    if score >= CONF_THRESHOLD:
+                                        # Escalar coordenadas a la resolución real de la cámara (640x480)
+                                        x1 = int(xmin * w_orig)
+                                        y1 = int(ymin * h_orig)
+                                        x2 = int(xmax * w_orig)
+                                        y2 = int(ymax * h_orig)
+                                        
+                                        label_idx = int(class_id)
+                                        label = COCO_CLASSES[label_idx] if label_idx < len(COCO_CLASSES) else f"ID:{label_idx}"
+                                        caption = f"{label} {score:.2f}"
 
-                    for det in detections:
-                        # Estructura devuelta por Hailo: [ymin, xmin, ymax, xmax, confidence, class_id]
-                        if len(det) >= 6:
-                            ymin, xmin, ymax, xmax, score, class_id = det[:6]
-                            
-                            if score >= CONF_THRESHOLD:
-                                # Denormalizar coordenadas (0.0 a 1.0 -> dimensiones reales)
-                                x1 = int(xmin * w_orig)
-                                y1 = int(ymin * h_orig)
-                                x2 = int(xmax * w_orig)
-                                y2 = int(ymax * h_orig)
-                                
-                                label_idx = int(class_id)
-                                label = COCO_CLASSES[label_idx] if label_idx < len(COCO_CLASSES) else f"ID:{label_idx}"
-                                caption = f"{label} {score:.2f}"
+                                        # Dibujar Bounding Box (Verde)
+                                        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                        
+                                        # Dibujar etiqueta de texto
+                                        (w_txt, h_txt), _ = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                                        cv2.rectangle(display_frame, (x1, max(y1 - 20, 0)), (x1 + w_txt, max(y1, 20)), (0, 255, 0), -1)
+                                        cv2.putText(display_frame, caption, (x1, max(y1 - 5, 15)), 
+                                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
 
-                                # Dibujar Bounding Box
-                                cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                
-                                # Dibujar Etiqueta con Fondo
-                                (w_txt, h_txt), _ = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                                cv2.rectangle(display_frame, (x1, max(y1 - 20, 0)), (x1 + w_txt, max(y1, 20)), (0, 255, 0), -1)
-                                cv2.putText(display_frame, caption, (x1, max(y1 - 5, 15)), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-
-                    # Mostrar fotograma renderizado
+                    # Mostrar fotograma corregido en colores reales con detecciones
                     cv2.imshow("Hailo AI Kit - Deteccion YOLOv8", display_frame)
                     
-                    # Presionar 'Enter' para salir
+                    # Presionar 'Enter' (código 13) para salir
                     if cv2.waitKey(1) & 0xFF == 13:
                         break
             finally:

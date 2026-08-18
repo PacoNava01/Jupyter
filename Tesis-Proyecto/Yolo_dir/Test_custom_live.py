@@ -79,27 +79,42 @@ with VDevice(params) as target:
                     frame = cv2.rotate(frame, cv2.ROTATE_180)
                     h_orig, w_orig, _ = frame.shape
 
-                    # Inferencia
-                    resized_img = cv2.resize(frame, (input_w, input_h))
+                    # 1. FIX DE COLORES: Asumimos que frame viene en BGR por OpenCV
+                    display_frame = frame.copy() # OpenCV usa BGR nativamente para mostrar
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # YOLO necesita RGB
+
+                    # Inferencia (Usando el frame RGB)
+                    resized_img = cv2.resize(rgb_frame, (input_w, input_h))
                     input_data = {input_name: np.expand_dims(resized_img, axis=0).astype(np.uint8)}
                     raw_results = infer_pipeline.infer(input_data)
 
-                    # Organizar salidas por escala (80x80, 40x40, 20x20)
-                    # Separar cajas (4 canales DFL) y probabilidades de clases (3 clases)
-                    cls_outputs, box_outputs = [], []
+                    # 2. FIX DE TENSORES: Separar y ORDENAR por resolución espacial
+                    cls_outputs_raw = []
+                    box_outputs_raw = []
+
                     for name, tensor in raw_results.items():
                         t = tensor[0]
                         if t.shape[-1] == 3:
-                            cls_outputs.append(t.reshape(-1, 3))
+                            cls_outputs_raw.append(t)
                         elif t.shape[-1] in (16, 64):
-                            dfl_scores = t.reshape(-1, 4, t.shape[-1] // 4)
-                            # Softmax rápido sobre canales DFL
-                            exp_dfl = np.exp(dfl_scores - np.max(dfl_scores, axis=-1, keepdims=True))
-                            dfl_weights = exp_dfl / np.sum(exp_dfl, axis=-1, keepdims=True)
-                            integrated_box = np.sum(dfl_weights * np.arange(t.shape[-1] // 4), axis=-1)
-                            box_outputs.append(integrated_box)
+                            box_outputs_raw.append(t)
 
-                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    # ¡CRÍTICO! Ordenar de mayor a menor resolución (80x80 -> 40x40 -> 20x20)
+                    cls_outputs_raw.sort(key=lambda x: x.shape[0], reverse=True)
+                    box_outputs_raw.sort(key=lambda x: x.shape[0], reverse=True)
+
+                    cls_outputs, box_outputs = [], []
+
+                    # Procesar en el orden correcto
+                    for t_cls, t_box in zip(cls_outputs_raw, box_outputs_raw):
+                        cls_outputs.append(t_cls.reshape(-1, 3))
+
+                        # Decodificación DFL
+                        dfl_scores = t_box.reshape(-1, 4, t_box.shape[-1] // 4)
+                        exp_dfl = np.exp(dfl_scores - np.max(dfl_scores, axis=-1, keepdims=True))
+                        dfl_weights = exp_dfl / np.sum(exp_dfl, axis=-1, keepdims=True)
+                        integrated_box = np.sum(dfl_weights * np.arange(t_box.shape[-1] // 4), axis=-1)
+                        box_outputs.append(integrated_box)
 
                     if cls_outputs and box_outputs:
                         all_cls = sigmoid(np.vstack(cls_outputs))
@@ -118,7 +133,7 @@ with VDevice(params) as target:
                             (y2 - y1) * (h_orig / input_h)
                         ]).astype(int)
 
-                        # Supresión de No Máximos (NMS) por cada clase
+                        # Supresión de No Máximos (NMS)
                         for class_id in range(len(CUSTOM_CLASSES)):
                             scores = all_cls[:, class_id]
                             mask = scores >= CONF_THRESHOLD
@@ -144,7 +159,7 @@ with VDevice(params) as target:
 
                     cv2.imshow("Hailo AI Kit - Deteccion RGB012", display_frame)
 
-                    if cv2.waitKey(1) & 0xFF == 13:
+                    if cv2.waitKey(1) & 0xFF == 13: # Enter para salir
                         break
             finally:
                 cam.stop()

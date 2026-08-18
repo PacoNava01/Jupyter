@@ -4,14 +4,12 @@ from picamera2 import Picamera2
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
                             ConfigureParams, InputVStreamParams, OutputVStreamParams)
 
-# 1. Definición de tus 3 clases personalizadas
+# Clases del dataset RGB012
 CUSTOM_CLASSES = ["red", "green", "blue"]
-
-# Colores BGR para dibujar cada clase: Rojo (B=0,G=0,R=255), Verde (B=0,G=255,R=0), Azul (B=255,G=0,R=0)
 CLASS_COLORS = {
-    0: (0, 0, 255),    # Red
-    1: (0, 255, 0),    # Green
-    2: (255, 0, 0)     # Blue
+    0: (0, 0, 255),    # Red (BGR)
+    1: (0, 255, 0),    # Green (BGR)
+    2: (255, 0, 0)     # Blue (BGR)
 }
 
 def init_cam():
@@ -28,7 +26,20 @@ def init_cam():
         print(f"Error al iniciar la cámara: {e}")
         return None
 
-# 2. Cargar tu modelo compilado .hef
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+def generate_grid_strides(img_size=640, strides=(8, 16, 32)):
+    grid_points, stride_tensor = [], []
+    for s in strides:
+        h_grid = img_size // s
+        w_grid = img_size // s
+        x, y = np.meshgrid(np.arange(w_grid), np.arange(h_grid))
+        grid_points.append(np.stack([x.flatten(), y.flatten()], axis=-1))
+        stride_tensor.append(np.full((h_grid * w_grid, 1), s))
+    return np.vstack(grid_points), np.vstack(stride_tensor)
+
+# 1. Configuración de modelo
 hef_path = "Tesis-Proyecto/Yolo_dir/best_rgb012.hef"
 hef = HEF(hef_path)
 
@@ -36,11 +47,9 @@ input_info = hef.get_input_vstream_infos()[0]
 input_h, input_w = input_info.shape[0], input_info.shape[1]
 input_name = input_info.name
 
-# Inspeccionar nombre de capas de salida
-output_infos = hef.get_output_vstream_infos()
-print(f"Capas de salida detectadas en el HEF: {[info.name for info in output_infos]}")
+# Generar cuadrículas de anclas
+anchors, strides = generate_grid_strides(img_size=input_w)
 
-# 3. Configurar Hardware Hailo-8L
 params = VDevice.create_params()
 with VDevice(params) as target:
     configure_params = ConfigureParams.create_from_hef(hef, interface=HailoStreamInterface.PCIe)
@@ -57,88 +66,87 @@ with VDevice(params) as target:
             if cam is None:
                 exit(1)
 
-            CONF_THRESHOLD = 0.2  # Umbral de confianza
-            print("Iniciando detección de colores RGB en vivo (Presiona ENTER para salir)...")
+            CONF_THRESHOLD = 0.4
+            IOU_THRESHOLD = 0.45
+            print("Iniciando detección con decodificación de anclas (Presiona ENTER para salir)...")
 
             try:
                 while True:
-                    frame = cam.capture_array() # Frame en RGB desde Picamera2
+                    frame = cam.capture_array()
                     if frame is None:
                         break
-                        
+                    
                     frame = cv2.rotate(frame, cv2.ROTATE_180)
                     h_orig, w_orig, _ = frame.shape
 
-                    # Preprocesamiento hacia la NPU (YOLO espera RGB)
+                    # Inferencia
                     resized_img = cv2.resize(frame, (input_w, input_h))
                     input_data = {input_name: np.expand_dims(resized_img, axis=0).astype(np.uint8)}
-
-                    # Inferencia en el chip Hailo-8L
                     raw_results = infer_pipeline.infer(input_data)
 
-                    # CORREGIDO: Convertir de RGB (Picamera2) a BGR (para que OpenCV pinte bien los colores)
+                    # Organizar salidas por escala (80x80, 40x40, 20x20)
+                    # Separar cajas (4 canales DFL) y probabilidades de clases (3 clases)
+                    cls_outputs, box_outputs = [], []
+                    for name, tensor in raw_results.items():
+                        t = tensor[0]
+                        if t.shape[-1] == 3:
+                            cls_outputs.append(t.reshape(-1, 3))
+                        elif t.shape[-1] in (16, 64):
+                            dfl_scores = t.reshape(-1, 4, t.shape[-1] // 4)
+                            # Softmax rápido sobre canales DFL
+                            exp_dfl = np.exp(dfl_scores - np.max(dfl_scores, axis=-1, keepdims=True))
+                            dfl_weights = exp_dfl / np.sum(exp_dfl, axis=-1, keepdims=True)
+                            integrated_box = np.sum(dfl_weights * np.arange(t.shape[-1] // 4), axis=-1)
+                            box_outputs.append(integrated_box)
+
                     display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                    # Desempaquetado de las salidas
-                    for out_name, out_tensor in raw_results.items():
-                        if isinstance(out_tensor, (list, np.ndarray)) and len(out_tensor) > 0:
-                            detections_batch = out_tensor[0]
+                    if cls_outputs and box_outputs:
+                        all_cls = sigmoid(np.vstack(cls_outputs))
+                        all_boxes = np.vstack(box_outputs)
 
-                            # Recorrer las clases detectadas de forma segura
-                            for class_id, boxes_for_class in enumerate(detections_batch):
-                                if class_id >= len(CUSTOM_CLASSES):
-                                    break
-                                
-                                if len(boxes_for_class) == 0:
-                                    continue
-                                    
-                                for det in boxes_for_class:
-                                    if len(det) >= 5:
-                                        ymin, xmin, ymax, xmax, score = det[:5]
+                        # Decodificación de coordenadas relativas [lt, rb] a [x, y, w, h]
+                        x1 = (anchors[:, 0] - all_boxes[:, 0]) * strides[:, 0]
+                        y1 = (anchors[:, 1] - all_boxes[:, 1]) * strides[:, 0]
+                        x2 = (anchors[:, 0] + all_boxes[:, 2]) * strides[:, 0]
+                        y2 = (anchors[:, 1] + all_boxes[:, 3]) * strides[:, 0]
 
-                                        if score >= CONF_THRESHOLD:
-                                            x1 = int(xmin * w_orig)
-                                            y1 = int(ymin * h_orig)
-                                            x2 = int(xmax * w_orig)
-                                            y2 = int(ymax * h_orig)
+                        boxes = np.column_stack([
+                            x1 * (w_orig / input_w),
+                            y1 * (h_orig / input_h),
+                            (x2 - x1) * (w_orig / input_w),
+                            (y2 - y1) * (h_orig / input_h)
+                        ]).astype(int)
 
-                                            label_name = CUSTOM_CLASSES[class_id]
-                                            color_box = CLASS_COLORS.get(class_id, (0, 255, 0))
-                                            caption = f"{label_name} {score:.2f}"
+                        # Supresión de No Máximos (NMS) por cada clase
+                        for class_id in range(len(CUSTOM_CLASSES)):
+                            scores = all_cls[:, class_id]
+                            mask = scores >= CONF_THRESHOLD
+                            if np.any(mask):
+                                filtered_boxes = boxes[mask].tolist()
+                                filtered_scores = scores[mask].tolist()
 
-                                            # Dibujar cuadro delimitador y etiqueta
-                                            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color_box, 2)
-                                            cv2.putText(display_frame, caption, (x1, max(y1 - 8, 15)),
-                                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_box, 2)
+                                indices = cv2.dnn.NMSBoxes(
+                                    filtered_boxes, filtered_scores, CONF_THRESHOLD, IOU_THRESHOLD
+                                )
+
+                                for idx in indices:
+                                    i = idx[0] if isinstance(idx, (list, tuple, np.ndarray)) else idx
+                                    bx, by, bw, bh = filtered_boxes[i]
+                                    score = filtered_scores[i]
+                                    label_name = CUSTOM_CLASSES[class_id]
+                                    color = CLASS_COLORS[class_id]
+
+                                    cv2.rectangle(display_frame, (bx, by), (bx + bw, by + bh), color, 2)
+                                    cv2.putText(display_frame, f"{label_name} {score:.2f}",
+                                                (bx, max(by - 8, 15)), cv2.FONT_HERSHEY_SIMPLEX,
+                                                0.5, color, 2)
 
                     cv2.imshow("Hailo AI Kit - Deteccion RGB012", display_frame)
 
-                    # Salir con la tecla Enter (13)
                     if cv2.waitKey(1) & 0xFF == 13:
                         break
             finally:
                 cam.stop()
                 cv2.destroyAllWindows()
-                print("Cámara liberada y recursos cerrados.")
-
-                '''
-                (.pacon) pacon@Pacon:~/Jupyter $ /home/pacon/Jupyter/Librerias/.pacon/bin/python /home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/Test_custom_live.py
-Capas de salida detectadas en el HEF: ['yolov8s/conv41', 'yolov8s/conv42', 'yolov8s/conv52', 'yolov8s/conv53', 'yolov8s/conv62', 'yolov8s/conv63']
-[3:15:34.693455167] [63500]  INFO Camera camera_manager.cpp:340 libcamera v0.7.1+rpt20260609
-[3:15:34.702739199] [63518]  INFO RPI pisp.cpp:720 libpisp version v1.6.0 29-06-2026 (16:17:40)
-[3:15:34.711715212] [63518]  INFO IPAProxy ipa_proxy.cpp:184 Using tuning file /usr/share/libcamera/ipa/rpi/pisp/imx477.json
-[3:15:34.720775022] [63518]  INFO Camera camera_manager.cpp:223 Adding camera '/base/axi/pcie@1000120000/rp1/i2c@88000/imx477@1a' for pipeline handler rpi/pisp
-[3:15:34.720832615] [63518]  INFO RPI pisp.cpp:1181 Registered camera /base/axi/pcie@1000120000/rp1/i2c@88000/imx477@1a to CFE device /dev/media0 and ISP device /dev/media2 using PiSP variant BCM2712_C0
-[3:15:34.724297823] [63518]  WARN V4L2 v4l2_pixelformat.cpp:346 Unsupported V4L2 pixel format Nc30
-[3:15:34.724342583] [63518]  WARN V4L2 v4l2_pixelformat.cpp:346 Unsupported V4L2 pixel format Nc12
-[3:15:34.726709457] [63500]  INFO Camera camera.cpp:1216 configuring streams: (0) 640x480-RGB888/SMPTE170M/Rec709/None/Full (1) 1332x990-BGGR_PISP_COMP1/RAW
-[3:15:34.728090348] [63518]  INFO RPI pisp.cpp:1485 Sensor: /base/axi/pcie@1000120000/rp1/i2c@88000/imx477@1a - Selected sensor format: 1332x990-SBGGR12_1X12/RAW - Selected CFE format: 1332x990-PC1B/RAW
-Cámara Picamera2 iniciada correctamente.
-Iniciando detección de colores RGB en vivo (Presiona ENTER para salir)...
-Cámara liberada y recursos cerrados.
-Traceback (most recent call last):
-  File "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/Test_custom_live.py", line 100, in <module>
-    x1 = int(xmin * w_orig)
-             ~~~~~^~~~~~~~
-OverflowError: Python integer 640 out of bounds for uint8
-                '''
+                print("Cámara liberada.")

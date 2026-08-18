@@ -1,16 +1,36 @@
+import os
 import cv2
 import numpy as np
 from picamera2 import Picamera2
-from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
-                            ConfigureParams, InputVStreamParams, OutputVStreamParams)
+from hailo_platform import (
+    HEF, VDevice, HailoStreamInterface, InferVStreams,
+    ConfigureParams, InputVStreamParams, OutputVStreamParams
+)
 
-# Clases del dataset RGB012
-CUSTOM_CLASSES = ["red", "green", "blue"]
+# 1. Configuración de Clases y Colores para Color Cap (11 clases)
+CUSTOM_CLASSES = [
+    'black', 'blue', 'brown', 'green', 'grey', 
+    'orange', 'pink', 'purple', 'red', 'white', 'yellow'
+]
+
+# Mapa de colores BGR para visualización en OpenCV
 CLASS_COLORS = {
-    0: (0, 0, 255),    # Red (BGR)
-    1: (0, 255, 0),    # Green (BGR)
-    2: (255, 0, 0)     # Blue (BGR)
+    0: (30, 30, 30),       # black
+    1: (255, 0, 0),        # blue
+    2: (19, 69, 139),      # brown
+    3: (0, 255, 0),        # green
+    4: (128, 128, 128),    # grey
+    5: (0, 165, 255),      # orange
+    6: (203, 192, 255),    # pink
+    7: (128, 0, 128),      # purple
+    8: (0, 0, 255),        # red
+    9: (255, 255, 255),    # white
+    10: (0, 255, 255)      # yellow
 }
+
+NUM_CLASSES = len(CUSTOM_CLASSES)
+CONF_THRESHOLD = 0.45
+IOU_THRESHOLD = 0.45
 
 def init_cam():
     try:
@@ -32,24 +52,28 @@ def sigmoid(x):
 def generate_grid_strides(img_size=640, strides=(8, 16, 32)):
     grid_points, stride_tensor = [], []
     for s in strides:
-        h_grid = img_size // s
-        w_grid = img_size // s
-        x, y = np.meshgrid(np.arange(w_grid), np.arange(h_grid))
+        grid_dim = img_size // s
+        y, x = np.meshgrid(np.arange(grid_dim), np.arange(grid_dim), indexing='ij')
         grid_points.append(np.stack([x.flatten(), y.flatten()], axis=-1))
-        stride_tensor.append(np.full((h_grid * w_grid, 1), s))
-    return np.vstack(grid_points), np.vstack(stride_tensor)
+        stride_tensor.append(np.full((grid_dim * grid_dim, 1), s))
+    return np.vstack(grid_points).astype(np.float32), np.vstack(stride_tensor).astype(np.float32)
 
-# 1. Configuración de modelo
-hef_path = "Tesis-Proyecto/Yolo_dir/best_rgb012.hef"
+# 2. Configuración del modelo HEF
+hef_path = "Tesis-Proyecto/Yolo_dir/best_color_cap.hef"
+if not os.path.exists(hef_path):
+    # Fallback a ruta relativa simple si se ejecuta directamente dentro de Yolo_dir
+    hef_path = "best_color_cap.hef"
+
 hef = HEF(hef_path)
-
 input_info = hef.get_input_vstream_infos()[0]
 input_h, input_w = input_info.shape[0], input_info.shape[1]
 input_name = input_info.name
 
-# Generar cuadrículas de anclas
+# Generar cuadrículas de anclas y pesos DFL precomputados
 anchors, strides = generate_grid_strides(img_size=input_w)
+dfl_weights = np.arange(16, dtype=np.float32)
 
+# 3. Inicialización del Hardware Hailo-8L
 params = VDevice.create_params()
 with VDevice(params) as target:
     configure_params = ConfigureParams.create_from_hef(hef, interface=HailoStreamInterface.PCIe)
@@ -66,80 +90,70 @@ with VDevice(params) as target:
             if cam is None:
                 exit(1)
 
-            CONF_THRESHOLD = 0.4
-            IOU_THRESHOLD = 0.45
-            print("Iniciando detección con decodificación de anclas (Presiona ENTER para salir)...")
+            print("Iniciando detección Color Cap en vivo (Presiona ENTER para salir)...")
 
             try:
                 while True:
-                    frame = cam.capture_array()
-                    if frame is None:
+                    # Captura en RGB nativo desde Picamera2
+                    frame_rgb = cam.capture_array()
+                    if frame_rgb is None:
                         break
-                    
-                    frame = cv2.rotate(frame, cv2.ROTATE_180)
-                    h_orig, w_orig, _ = frame.shape
 
-                    # 1. FIX DE COLORES: Asumimos que frame viene en BGR por OpenCV
-                    display_frame = frame.copy() # OpenCV usa BGR nativamente para mostrar
-                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # YOLO necesita RGB
+                    # Orientación física de la cámara
+                    frame_rgb = cv2.rotate(frame_rgb, cv2.ROTATE_180)
+                    h_orig, w_orig, _ = frame_rgb.shape
 
-                    # Inferencia (Usando el frame RGB)
-                    resized_img = cv2.resize(rgb_frame, (input_w, input_h))
+                    # Preprocesamiento NPU (uint8 RGB)
+                    resized_img = cv2.resize(frame_rgb, (input_w, input_h))
                     input_data = {input_name: np.expand_dims(resized_img, axis=0).astype(np.uint8)}
                     raw_results = infer_pipeline.infer(input_data)
 
-                    # 2. FIX DE TENSORES: Separar y ORDENAR por resolución espacial
+                    # Separar tensores por número de canales
                     cls_outputs_raw = []
                     box_outputs_raw = []
 
                     for name, tensor in raw_results.items():
                         t = tensor[0]
-                        if t.shape[-1] == 3:
+                        if t.shape[-1] == NUM_CLASSES:
                             cls_outputs_raw.append(t)
                         elif t.shape[-1] in (16, 64):
                             box_outputs_raw.append(t)
 
-                    # ¡CRÍTICO! Ordenar de mayor a menor resolución (80x80 -> 40x40 -> 20x20)
+                    # Ordenar descendentemente por resolución espacial (80x80 -> 40x40 -> 20x20)
                     cls_outputs_raw.sort(key=lambda x: x.shape[0], reverse=True)
                     box_outputs_raw.sort(key=lambda x: x.shape[0], reverse=True)
 
-                    cls_outputs, box_outputs = [], []
+                    if cls_outputs_raw and box_outputs_raw:
+                        # Vectorizar clases
+                        cls_concat = np.vstack([t.reshape(-1, NUM_CLASSES) for t in cls_outputs_raw])
+                        all_cls = sigmoid(cls_concat)
 
-                    # Procesar en el orden correcto
-                    for t_cls, t_box in zip(cls_outputs_raw, box_outputs_raw):
-                        cls_outputs.append(t_cls.reshape(-1, 3))
+                        # Vectorizar y decodificar DFL
+                        box_concat = np.vstack([t.reshape(-1, 64) for t in box_outputs_raw])
+                        dfl_reshaped = box_concat.reshape(-1, 4, 16)
+                        exp_dfl = np.exp(dfl_reshaped - np.max(dfl_reshaped, axis=-1, keepdims=True))
+                        dfl_softmax = exp_dfl / np.sum(exp_dfl, axis=-1, keepdims=True)
+                        dist = np.sum(dfl_softmax * dfl_weights, axis=-1)
 
-                        # Decodificación DFL
-                        dfl_scores = t_box.reshape(-1, 4, t_box.shape[-1] // 4)
-                        exp_dfl = np.exp(dfl_scores - np.max(dfl_scores, axis=-1, keepdims=True))
-                        dfl_weights = exp_dfl / np.sum(exp_dfl, axis=-1, keepdims=True)
-                        integrated_box = np.sum(dfl_weights * np.arange(t_box.shape[-1] // 4), axis=-1)
-                        box_outputs.append(integrated_box)
+                        # Decodificación de coordenadas relativas a absolutas escaladas
+                        x1 = (anchors[:, 0] - dist[:, 0]) * strides[:, 0] * (float(w_orig) / input_w)
+                        y1 = (anchors[:, 1] - dist[:, 1]) * strides[:, 0] * (float(h_orig) / input_h)
+                        x2 = (anchors[:, 0] + dist[:, 2]) * strides[:, 0] * (float(w_orig) / input_w)
+                        y2 = (anchors[:, 1] + dist[:, 3]) * strides[:, 0] * (float(h_orig) / input_h)
 
-                    if cls_outputs and box_outputs:
-                        all_cls = sigmoid(np.vstack(cls_outputs))
-                        all_boxes = np.vstack(box_outputs)
+                        boxes = np.column_stack([x1, y1, x2 - x1, y2 - y1]).astype(int)
 
-                        # Decodificación de coordenadas relativas [lt, rb] a [x, y, w, h]
-                        x1 = (anchors[:, 0] - all_boxes[:, 0]) * strides[:, 0]
-                        y1 = (anchors[:, 1] - all_boxes[:, 1]) * strides[:, 0]
-                        x2 = (anchors[:, 0] + all_boxes[:, 2]) * strides[:, 0]
-                        y2 = (anchors[:, 1] + all_boxes[:, 3]) * strides[:, 0]
+                        # Preparar canvas BGR solo para visualización en OpenCV
+                        display_frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
-                        boxes = np.column_stack([
-                            x1 * (w_orig / input_w),
-                            y1 * (h_orig / input_h),
-                            (x2 - x1) * (w_orig / input_w),
-                            (y2 - y1) * (h_orig / input_h)
-                        ]).astype(int)
-
-                        # Supresión de No Máximos (NMS)
-                        for class_id in range(len(CUSTOM_CLASSES)):
+                        # Supresión de No Máximos (NMS) por cada clase
+                        for class_id in range(NUM_CLASSES):
                             scores = all_cls[:, class_id]
                             mask = scores >= CONF_THRESHOLD
+                            
                             if np.any(mask):
                                 filtered_boxes = boxes[mask].tolist()
-                                filtered_scores = scores[mask].tolist()
+                                filtered_scores = scores[mask].astype(float).tolist()
 
                                 indices = cv2.dnn.NMSBoxes(
                                     filtered_boxes, filtered_scores, CONF_THRESHOLD, IOU_THRESHOLD
@@ -150,18 +164,25 @@ with VDevice(params) as target:
                                     bx, by, bw, bh = filtered_boxes[i]
                                     score = filtered_scores[i]
                                     label_name = CUSTOM_CLASSES[class_id]
-                                    color = CLASS_COLORS[class_id]
+                                    color = CLASS_COLORS.get(class_id, (0, 255, 0))
 
+                                    # Dibujar caja y etiqueta
                                     cv2.rectangle(display_frame, (bx, by), (bx + bw, by + bh), color, 2)
-                                    cv2.putText(display_frame, f"{label_name} {score:.2f}",
-                                                (bx, max(by - 8, 15)), cv2.FONT_HERSHEY_SIMPLEX,
-                                                0.5, color, 2)
+                                    caption = f"{label_name} {score:.2f}"
+                                    cv2.putText(
+                                        display_frame, caption,
+                                        (bx, max(by - 8, 15)),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
+                                    )
 
-                    cv2.imshow("Hailo AI Kit - Deteccion RGB012", display_frame)
+                        cv2.imshow("Hailo-8L - Deteccion Color Cap", display_frame)
+                    else:
+                        display_frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                        cv2.imshow("Hailo-8L - Deteccion Color Cap", display_frame)
 
-                    if cv2.waitKey(1) & 0xFF == 13: # Enter para salir
+                    if cv2.waitKey(1) & 0xFF == 13:  # Enter para salir
                         break
             finally:
                 cam.stop()
                 cv2.destroyAllWindows()
-                print("Cámara liberada.")
+                print("Cámara liberada y recursos cerrados.")

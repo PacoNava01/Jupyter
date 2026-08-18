@@ -1,17 +1,17 @@
-import cv2 
+import cv2
 import numpy as np
 from picamera2 import Picamera2
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
                             ConfigureParams, InputVStreamParams, OutputVStreamParams)
 
-#1. Definicion de las 3 clases personalizadas
-CUSTOM_CLASSES = ["red","green","blue"]
+# 1. Definición de tus 3 clases personalizadas
+CUSTOM_CLASSES = ["red", "green", "blue"]
 
-#Colores BGR para dibujar cada clase: rojo (B=0,G=0,R=255), verde (B=0,G=255,R=0), azul (B=255,G=0,R=0)
+# Colores BGR para dibujar cada clase: Rojo (B=0,G=0,R=255), Verde (B=0,G=255,R=0), Azul (B=255,G=0,R=0)
 CLASS_COLORS = {
-    0:(0,0,255), #Rojo
-    1:(0,255,0), #Verde
-    2:(255,0,0) #Azull
+    0: (0, 0, 255),    # Red
+    1: (0, 255, 0),    # Green
+    2: (255, 0, 0)     # Blue
 }
 
 def init_cam():
@@ -22,25 +22,25 @@ def init_cam():
         )
         cam.configure(config)
         cam.start()
-        print("Cámara Picamera2 iniciada.")
+        print("Cámara Picamera2 iniciada correctamente.")
         return cam
     except Exception as e:
-        print(f"Error iniciando la cámara: {e}")
+        print(f"Error al iniciar la cámara: {e}")
         return None
 
-#2. Cargar el modelo compilado .hef
-hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
+# 2. Cargar tu modelo compilado .hef
+hef_path = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/best_rgb012.hef"
 hef = HEF(hef_path)
 
 input_info = hef.get_input_vstream_infos()[0]
 input_h, input_w = input_info.shape[0], input_info.shape[1]
 input_name = input_info.name
 
-#Inspeccionar nombre de capas de salida
+# Inspeccionar nombre de capas de salida
 output_infos = hef.get_output_vstream_infos()
 print(f"Capas de salida detectadas en el HEF: {[info.name for info in output_infos]}")
 
-#3. Configurar el Hardware Hailo-8L
+# 3. Configurar Hardware Hailo-8L
 params = VDevice.create_params()
 with VDevice(params) as target:
     configure_params = ConfigureParams.create_from_hef(hef, interface=HailoStreamInterface.PCIe)
@@ -57,27 +57,62 @@ with VDevice(params) as target:
             if cam is None:
                 exit(1)
 
-            CONF_THRESHOLD = 0.35 #Umbral de confianza
+            CONF_THRESHOLD = 0.35  # Umbral de confianza
             print("Iniciando detección de colores RGB en vivo (Presiona ENTER para salir)...")
 
             try:
                 while True:
-                    frame = cam.capture_array() #Frame en RGB desde Picamera2
+                    frame = cam.capture_array() # Frame en RGB desde Picamera2
                     if frame is None:
                         break
-                    h_orig,w_orig, _ = frame.shape
 
-                    #Preprocesamiento hacia la NPU
-                    resized_img = cv2.resize(frame,(input_w,input_h))
-                    input_data = {input_name: np.expand_dims(resized_img,axis=0).astype(np.uint8)}
+                    h_orig, w_orig, _ = frame.shape
 
-                    #Inferencia en el chip Hailo-8L
+                    # Preprocesamiento hacia la NPU
+                    resized_img = cv2.resize(frame, (input_w, input_h))
+                    input_data = {input_name: np.expand_dims(resized_img, axis=0).astype(np.uint8)}
+
+                    # Inferencia en el chip Hailo-8L
                     raw_results = infer_pipeline.infer(input_data)
 
-                    #frame para Opencv (RGB a BGR)
-                    display_frame = cv2.cvtColor(frame,cv2.COLOR_RGB2BGR)
+                    # Frame para OpenCV (RGB a BGR)
+                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-                    #Desempaquetado de las saldias
-                    for out_name, out_tensor in raw_results.item():
-                        #Si el HEF postproceso NMS agrupado por clases (3 clases en este caso)
-                        if isinstance
+                    # Desempaquetado de las salidas
+                    for out_name, out_tensor in raw_results.items():
+                        # Si el HEF incluye postproceso NMS agrupado por clases (3 clases)
+                        if isinstance(out_tensor, (list, np.ndarray)) and len(out_tensor) > 0:
+                            detections_batch = out_tensor[0]
+                            detections_array = np.array(detections_batch)
+
+                            # Recorrer las clases detectadas
+                            for class_id in range(min(len(CUSTOM_CLASSES), detections_array.shape[0])):
+                                boxes_for_class = detections_array[class_id]
+                                for det in boxes_for_class:
+                                    if len(det) >= 5:
+                                        ymin, xmin, ymax, xmax, score = det[:5]
+
+                                        if score >= CONF_THRESHOLD:
+                                            x1 = int(xmin * w_orig)
+                                            y1 = int(ymin * h_orig)
+                                            x2 = int(xmax * w_orig)
+                                            y2 = int(ymax * h_orig)
+
+                                            label_name = CUSTOM_CLASSES[class_id]
+                                            color_box = CLASS_COLORS.get(class_id, (0, 255, 0))
+                                            caption = f"{label_name} {score:.2f}"
+
+                                            # Dibujar cuadro delimitador y etiqueta
+                                            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color_box, 2)
+                                            cv2.putText(display_frame, caption, (x1, max(y1 - 8, 15)),
+                                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_box, 2)
+
+                    cv2.imshow("Hailo AI Kit - Deteccion RGB012", display_frame)
+
+                    # Salir con la tecla Enter (13)
+                    if cv2.waitKey(1) & 0xFF == 13:
+                        break
+            finally:
+                cam.stop()
+                cv2.destroyAllWindows()
+                print("Cámara liberada y recursos cerrados.")

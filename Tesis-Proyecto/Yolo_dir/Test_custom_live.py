@@ -29,7 +29,7 @@ def init_cam():
         return None
 
 # 2. Cargar tu modelo compilado .hef
-hef_path = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/best_rgb012.hef"
+hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
 hef = HEF(hef_path)
 
 input_info = hef.get_input_vstream_infos()[0]
@@ -57,14 +57,16 @@ with VDevice(params) as target:
             if cam is None:
                 exit(1)
 
-            CONF_THRESHOLD = 0.35  # Umbral de confianza
+            CONF_THRESHOLD = 0.2  # Umbral de confianza
             print("Iniciando detección de colores RGB en vivo (Presiona ENTER para salir)...")
 
             try:
                 while True:
                     frame = cam.capture_array() # Frame en RGB desde Picamera2
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
                     if frame is None:
                         break
+                    # Frame para OpenCV (RGB a BGR)
 
                     h_orig, w_orig, _ = frame.shape
 
@@ -76,18 +78,21 @@ with VDevice(params) as target:
                     raw_results = infer_pipeline.infer(input_data)
 
                     # Frame para OpenCV (RGB a BGR)
-                    display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    display_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                     # Desempaquetado de las salidas
                     for out_name, out_tensor in raw_results.items():
-                        # Si el HEF incluye postproceso NMS agrupado por clases (3 clases)
                         if isinstance(out_tensor, (list, np.ndarray)) and len(out_tensor) > 0:
                             detections_batch = out_tensor[0]
-                            detections_array = np.array(detections_batch)
 
-                            # Recorrer las clases detectadas
-                            for class_id in range(min(len(CUSTOM_CLASSES), detections_array.shape[0])):
-                                boxes_for_class = detections_array[class_id]
+                            # Recorrer las clases detectadas de forma segura (sin np.array global)
+                            for class_id, boxes_for_class in enumerate(detections_batch):
+                                if class_id >= len(CUSTOM_CLASSES):
+                                    break
+                                
+                                if len(boxes_for_class) == 0:
+                                    continue
+                                    
                                 for det in boxes_for_class:
                                     if len(det) >= 5:
                                         ymin, xmin, ymax, xmax, score = det[:5]

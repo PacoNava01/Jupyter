@@ -16,8 +16,8 @@ COCO_CLASSES = [
     "hair drier", "toothbrush"
 ]
 
-hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
-image_path = "Tesis-Proyecto/Yolo_dir/test_game.jpg"
+hef_path = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/yolov8n.hef"
+image_path = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/test_game.jpg"
 output_path = "Tesis-Proyecto/Yolo_dir/test_game_detected.jpg"
 
 # 1. Cargar imagen original

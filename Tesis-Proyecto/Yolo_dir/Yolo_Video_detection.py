@@ -2,7 +2,7 @@
 script para la deteccion de objetos en formato de video
 '''
 
-
+import os
 import cv2
 import numpy as np
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams,
@@ -20,12 +20,16 @@ COCO_CLASSES = [
     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
     "hair drier", "toothbrush"
 ]
+# BASE_DIR ya contiene /home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Ruta de tu archivo de video
-video_path = "Tesis-Proyecto/Yolo_dir/Mexico City Traffic Stock Video.mp4"  # Cambiar esta ruta por la del video en turno
+
+output_path = os.path.join(BASE_DIR, "video_resultado_detectado.mp4")
+hef_path = os.path.join(BASE_DIR, "yolov8n.hef")
+video_path = os.path.join(BASE_DIR, "Mexico City Traffic Stock Video.mp4")
 
 # 1. Cargar modelo
-hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
+hef_path = os.path.join(BASE_DIR, "yolov8n.hef")
 hef = HEF(hef_path)
 
 input_info = hef.get_input_vstream_infos()[0]
@@ -46,13 +50,25 @@ with VDevice(params) as target:
     with network_group.activate(network_group_params):
         with InferVStreams(network_group, input_vstream_params, output_vstream_params) as infer_pipeline:
             
-            # Abrir archivo de video en lugar de Picamera2
+            # Abrir archivo de video
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 print(f"Error al abrir el video: {video_path}")
                 exit(1)
 
-            print(f"Reproduciendo video: {video_path} (Presiona ENTER para salir)...")
+            # Obtener propiedades del video original para configurar el grabador
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            if fps == 0 or np.isnan(fps):
+                fps = 30.0 # Valor por defecto si no se puede leer el FPS
+            
+            w_orig = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h_orig = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            # Configurar el VideoWriter (codec 'mp4v' es ideal para archivos .mp4)
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (w_orig, h_orig))
+
+            print(f"Procesando y guardando video en: {output_path} (Presiona ENTER para salir)...")
             CONF_THRESHOLD = 0.25
 
             try:
@@ -62,10 +78,8 @@ with VDevice(params) as target:
                         print("Fin del video o error al leer el fotograma.")
                         break
 
-                    h_orig, w_orig, _ = frame.shape
-
                     # Nota: OpenCV lee los videos por defecto en formato BGR. 
-                    # Si tu modelo fue entrenado con RGB, podemos convertirlo:
+                    # Si tu modelo fue entrenado con RGB, convertimos para la NPU:
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                     # Preprocesamiento NPU
@@ -100,12 +114,18 @@ with VDevice(params) as target:
                                     cv2.putText(frame, caption, (x1, max(y1 - 5, 15)),
                                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+                    # --- GUARDAR FOTOGRAMA PROCESADO ---
+                    out.write(frame)
+
+                    # Mostrar en pantalla (opcional, puedes quitar esta línea si procesas en modo headless o remoto)
                     cv2.imshow("Hailo AI Kit - Deteccion en Video", frame)
                     
-                    # Espera de 30ms aprox (o usa el FPS del video para mayor precisión) y Enter (13) para salir
                     if cv2.waitKey(30) & 0xFF == 13:
                         break
             finally:
+                # Liberar todos los recursos de video y grabador
                 cap.release()
+                out.release()
                 cv2.destroyAllWindows()
+                print(f"¡Video guardado exitosamente en: {output_path}!")
                 print("Recursos de video liberados correctamente.")

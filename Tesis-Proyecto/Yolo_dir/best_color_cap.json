@@ -1,0 +1,24 @@
+cat << 'EOF' > best_color_cap.json
+{
+"iou_threshold": 0.45,
+"detection_threshold": 0.5,
+"output_activation" : "none",
+"label_offset" : 1,
+"max_boxes": 200,
+"labels":[
+"unlabeled",
+"black",
+"blue",
+"brown",
+"green",
+"grey",
+"orange",
+"pink",
+"purple",
+"red",
+"white",
+"yellow"
+]
+
+}
+EOF

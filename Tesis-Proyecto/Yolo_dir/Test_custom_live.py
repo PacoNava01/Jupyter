@@ -177,7 +177,7 @@ with VDevice(params) as target:
 
                         cv2.imshow("Hailo-8L - Deteccion Color Cap", display_frame)
                     else:
-                        display_frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                        
                         cv2.imshow("Hailo-8L - Deteccion Color Cap", display_frame)
 
                     if cv2.waitKey(1) & 0xFF == 13:  # Enter para salir

@@ -1,0 +1,5 @@
+[2026-08-18 12:49:59.421] [120697] [HailoRT] [error] [file_utils.cpp:124] [open] CHECK failed - Failed opening file, path: Tesis-Proyecto/Yolo_dir/yolov8n.hef
+[2026-08-18 12:49:59.421] [120697] [HailoRT] [error] [hef.cpp:560] [parse_hef_file] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)
+[2026-08-18 12:49:59.421] [120697] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2026-08-18 12:49:59.422] [120697] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2026-08-18 12:49:59.422] [120697] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)

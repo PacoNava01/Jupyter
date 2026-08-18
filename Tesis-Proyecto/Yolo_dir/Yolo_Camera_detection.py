@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 from picamera2 import Picamera2
@@ -31,8 +32,10 @@ def init_cam():
         print(f"Error iniciando la cámara: {e}")
         return None
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # 1. Cargar modelo
-hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
+hef_path = os.path.join(BASE_DIR, "yolov8n.hef")
 hef = HEF(hef_path)
 
 input_info = hef.get_input_vstream_infos()[0]

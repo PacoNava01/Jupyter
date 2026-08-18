@@ -22,7 +22,7 @@ COCO_CLASSES = [
 ]
 
 # Ruta de tu archivo de video
-video_path = "Tesis-Proyecto/videos/test_video.mp4"  # Cambiar esta ruta por la del video en turno
+video_path = "Tesis-Proyecto/Yolo_dir/Mexico City Traffic Stock Video.mp4"  # Cambiar esta ruta por la del video en turno
 
 # 1. Cargar modelo
 hef_path = "Tesis-Proyecto/Yolo_dir/yolov8n.hef"
@@ -53,7 +53,7 @@ with VDevice(params) as target:
                 exit(1)
 
             print(f"Reproduciendo video: {video_path} (Presiona ENTER para salir)...")
-            CONF_THRESHOLD = 0.4
+            CONF_THRESHOLD = 0.25
 
             try:
                 while cap.isOpened():

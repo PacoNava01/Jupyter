@@ -1,3 +1,9 @@
+'''
+Esta es la version beta del script en la cual no se incluye ninguna libreria 
+o herramienta de IA de YOLO, siendo unicamente ejecuta por parte
+de opencv y lreberias de Hardware.
+'''
+
 from Vision.detector import ObjectDetector, obtener_mask
 from Vision.camara import init_cam
 from Hardware.Servomotores.MG996R import init_servos, Servo2Pos

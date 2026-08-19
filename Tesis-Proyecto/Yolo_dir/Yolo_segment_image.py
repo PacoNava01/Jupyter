@@ -19,9 +19,9 @@ COCO_CLASSES = [
 ]
 
 # Rutas de entrada y salida
-HEF_PATH = "Tesis-Proyecto/Yolo_dir/yolov8n_seg.hef"
-IMAGE_PATH = "Tesis-Proyecto/Yolo_dir/test.jpg"
-OUTPUT_PATH = "Tesis-Proyecto/Yolo_dir/test_segmented.jpg"
+HEF_PATH = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/yolov8n_seg.hef"
+IMAGE_PATH = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/test_game.jpg"
+OUTPUT_PATH = "/home/pacon/Jupyter/Tesis-Proyecto/Yolo_dir/test_segmented.jpg"
 
 CONF_THRESHOLD = 0.35
 MASK_THRESHOLD = 0.50
@@ -74,7 +74,6 @@ def run_segmentation():
 
     for key, value in raw_results.items():
         tensor = np.array(value)
-        # El mapa de prototipos suele tener 32 canales y tamaño espacial (ej. 160x160x32 o 1x160x160x32)
         if 32 in tensor.shape and len(tensor.shape) >= 3:
             proto_mask = tensor[0] if tensor.ndim == 4 else tensor
         else:
@@ -84,7 +83,6 @@ def run_segmentation():
     if detections is not None:
         det_array = np.array(detections)
         
-        # Iterar por clases si viene estructurado por clase (formato Hailo NMS)
         if det_array.ndim >= 2:
             for class_id in range(det_array.shape[0]):
                 boxes = det_array[class_id]
@@ -93,11 +91,20 @@ def run_segmentation():
                         ymin, xmin, ymax, xmax, score = det[:5]
                         
                         if score >= CONF_THRESHOLD:
-                            # Desnormalizar coordenadas a píxeles de la imagen original
-                            x1 = max(0, int(xmin * w_orig))
-                            y1 = max(0, int(ymin * h_orig))
-                            x2 = min(w_orig, int(xmax * w_orig))
-                            y2 = min(h_orig, int(ymax * h_orig))
+                            # Normalizar de forma segura las coordenadas (soporta formato 0-1 o escala de red)
+                            if xmin <= 1.0 and xmax <= 1.0:
+                                n_xmin, n_ymin, n_xmax, n_ymax = xmin, ymin, xmax, ymax
+                            else:
+                                n_xmin = xmin / float(input_w)
+                                n_ymin = ymin / float(input_h)
+                                n_xmax = xmax / float(input_w)
+                                n_ymax = ymax / float(input_h)
+
+                            # Coordenadas escaladas a la imagen original
+                            x1 = max(0, int(n_xmin * w_orig))
+                            y1 = max(0, int(n_ymin * h_orig))
+                            x2 = min(w_orig, int(n_xmax * w_orig))
+                            y2 = min(h_orig, int(n_ymax * h_orig))
 
                             # Color aleatorio pseudo-único por clase
                             np.random.seed(int(class_id))
@@ -109,24 +116,24 @@ def run_segmentation():
                             # Si hay tensor de prototipos disponible, generar la máscara poligonal
                             if proto_mask is not None:
                                 mask_h, mask_w, num_proto = proto_mask.shape
-                                # Coordenadas relativas a la resolución del prototipo
-                                mx1 = int(xmin * mask_w)
-                                my1 = int(ymin * mask_h)
-                                mx2 = int(xmax * mask_w)
-                                my2 = int(ymax * mask_h)
+                                mx1 = max(0, min(int(n_xmin * mask_w), mask_w))
+                                my1 = max(0, min(int(n_ymin * mask_h), mask_h))
+                                mx2 = max(0, min(int(n_xmax * mask_w), mask_w))
+                                my2 = max(0, min(int(n_ymax * mask_h), mask_h))
 
                                 if mx2 > mx1 and my2 > my1:
                                     sub_proto = proto_mask[my1:my2, mx1:mx2, :]
-                                    # Promedio / combinación de canales para aislar la figura
                                     mask_crop = np.mean(sub_proto, axis=-1)
                                     mask_binary = (sigmoid(mask_crop) > MASK_THRESHOLD).astype(np.uint8)
                                     
-                                    # Escalar la máscara al tamaño original de la caja
-                                    mask_resized = cv2.resize(mask_binary, (x2 - x1, y2 - y1), interpolation=cv2.INTER_NEAREST)
+                                    # Asegurar dimensiones válidas para el redimensionamiento
+                                    box_w = max(1, x2 - x1)
+                                    box_h = max(1, y2 - y1)
+                                    mask_resized = cv2.resize(mask_binary, (box_w, box_h), interpolation=cv2.INTER_NEAREST)
                                     
-                                    # Aplicar color a la región segmentada sobre el overlay
                                     roi = overlay[y1:y2, x1:x2]
-                                    roi[mask_resized == 1] = color
+                                    if roi.shape[0] == mask_resized.shape[0] and roi.shape[1] == mask_resized.shape[1]:
+                                        roi[mask_resized == 1] = color
                             
                             # Etiqueta de texto
                             label = COCO_CLASSES[class_id] if class_id < len(COCO_CLASSES) else f"ID:{class_id}"
